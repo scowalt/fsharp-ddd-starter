@@ -1,5 +1,7 @@
 # StarterKit
 
+> **Status: pre-stable.** Generated-app validation passes, but a real domain-bearing pilot is still required before this template is declared stable.
+
 Mission Control's F# starter for domain-bearing server-rendered web applications. It makes a proportional Domain-Driven Design workflow and a bounded-context-first modular monolith easier to follow than to bypass.
 
 The teaching slice models open and completed work items through pure F#, an Application-owned port, state-based SQLite persistence, Oxpecker.ViewEngine HTML, Datastar progressive enhancement, and pinned self-hosted 0build CSS. JavaScript is optional for the normal form flow.
