@@ -20,6 +20,8 @@ if git remote get-url origin 2>/dev/null | grep -Eq '(^|[:/])scowalt/fsharp-ddd-
 fi
 
 dotnet fsi scripts/init.fsx -- "$1" "$2"
+dotnet tool restore
+dotnet fantomas .
 
 rm -f docs/template-usage.md .template-manifest scripts/init.fsx
 rm -f -- "$0"
