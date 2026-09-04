@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Include="Ports.fs" />
+    <Compile Include="UseCases.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../StarterKit.WorkTracking.Domain/StarterKit.WorkTracking.Domain.fsproj" />
+  </ItemGroup>
+</Project>

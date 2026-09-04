@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Include="SqliteWorkItemStore.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Migrations/*.sql" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../StarterKit.WorkTracking.Application/StarterKit.WorkTracking.Application.fsproj" />
+    <ProjectReference Include="../StarterKit.WorkTracking.Domain/StarterKit.WorkTracking.Domain.fsproj" />
+  </ItemGroup>
+</Project>

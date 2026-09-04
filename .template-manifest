@@ -1,0 +1,11 @@
+Template tokens removed by scripts/init.sh:
+StarterKit
+starterkit
+WorkTracking
+worktracking
+
+Template-only files removed by scripts/init.sh:
+.template-manifest
+docs/template-usage.md
+scripts/init.fsx
+scripts/init.sh

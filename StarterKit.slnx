@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StarterKit.WorkTracking.Domain/StarterKit.WorkTracking.Domain.fsproj" />
+    <Project Path="src/StarterKit.WorkTracking.Application/StarterKit.WorkTracking.Application.fsproj" />
+    <Project Path="src/StarterKit.WorkTracking.Infrastructure/StarterKit.WorkTracking.Infrastructure.fsproj" />
+    <Project Path="src/StarterKit.Web/StarterKit.Web.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StarterKit.WorkTracking.Domain.Tests/StarterKit.WorkTracking.Domain.Tests.fsproj" />
+    <Project Path="tests/StarterKit.WorkTracking.Application.Tests/StarterKit.WorkTracking.Application.Tests.fsproj" />
+    <Project Path="tests/StarterKit.WorkTracking.Infrastructure.Tests/StarterKit.WorkTracking.Infrastructure.Tests.fsproj" />
+    <Project Path="tests/StarterKit.Architecture.Tests/StarterKit.Architecture.Tests.fsproj" />
+    <Project Path="tests/StarterKit.Web.Tests/StarterKit.Web.Tests.fsproj" />
+  </Folder>
+</Solution>

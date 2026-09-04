@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../StarterKit.WorkTracking.Application.Tests/UseCaseContract.fs" Link="UseCaseContract.fs" />
+    <Compile Include="SqliteWorkItemStoreTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/StarterKit.WorkTracking.Application/StarterKit.WorkTracking.Application.fsproj" />
+    <ProjectReference Include="../../src/StarterKit.WorkTracking.Domain/StarterKit.WorkTracking.Domain.fsproj" />
+    <ProjectReference Include="../../src/StarterKit.WorkTracking.Infrastructure/StarterKit.WorkTracking.Infrastructure.fsproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,8 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.{fs,fsx}"
+      run: dotnet fantomas --check {staged_files}
+    gitleaks:
+      run: gitleaks git --pre-commit --staged --redact
