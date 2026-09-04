@@ -5,4 +5,4 @@ pre-commit:
       glob: "*.{fs,fsx}"
       run: dotnet fantomas --check {staged_files}
     gitleaks:
-      run: gitleaks git --pre-commit --staged --redact
+      run: mise exec -- gitleaks git --pre-commit --staged --redact

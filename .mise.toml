@@ -9,7 +9,7 @@ lefthook = "2.1.12"
 description = "Install pinned tools and Git hooks"
 run = [
   "dotnet tool restore",
-  "lefthook install",
+  "mise exec -- lefthook install",
 ]
 
 [tasks.validate]
