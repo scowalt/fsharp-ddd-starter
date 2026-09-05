@@ -190,18 +190,18 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Data.Sqlite": "[10.0.11, )",
-          "SQLitePCLRaw.core": "[2.1.12, )",
+          "SQLitePCLRaw.core": "[2.1.13, )",
           "StarterKit.WorkTracking.Application": "[1.0.0, )",
           "StarterKit.WorkTracking.Domain": "[1.0.0, )",
-          "dbup-core": "[6.0.15, )",
+          "dbup-core": "[6.1.1, )",
           "dbup-sqlite": "[6.0.4, )"
         }
       },
       "dbup-core": {
         "type": "CentralTransitive",
-        "requested": "[6.0.15, )",
-        "resolved": "6.0.15",
-        "contentHash": "w0eaoyVitzgBiHTILEnj23smrbrxZ1nLF7K8uOyG6rvrctRtC0NTuSYHoB/3aq+B9hi9E/DiW9pOtNto5V9P3g==",
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "kgpuyJVEFJHoIj/slnc994Go88aoeZqNDfGHDBr4sh7CsEWwJhOTCt/FJqO4ziUImL5L0NEY0kxxOiNgPKI2Fw==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "8.0.0"
         }
@@ -250,9 +250,9 @@
       },
       "SQLitePCLRaw.core": {
         "type": "CentralTransitive",
-        "requested": "[2.1.12, )",
-        "resolved": "2.1.12",
-        "contentHash": "ETpNw9DY3ckWLgRRAeCHj+GKOuPi61aeczkXhgHexUvqoZBAYg8RYESE2J7O1M7+o6QbdSEZwrw9bfqztUVWXg=="
+        "requested": "[2.1.13, )",
+        "resolved": "2.1.13",
+        "contentHash": "2joofoinuHBFs0nMX3nKuXgxpXryRkCOdM2Ua6HBqQLLy6IW+5f28ZI+HAvMyF8vG7XfNz/lwfBfE6V4juru8Q=="
       },
       "StarFederation.Datastar.FSharp": {
         "type": "CentralTransitive",
