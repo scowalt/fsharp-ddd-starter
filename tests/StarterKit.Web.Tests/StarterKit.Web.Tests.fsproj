@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="WebTests.fs" />
+    <Compile Include="OperationalTests.fs" />
+    <Compile Include="StartupTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />

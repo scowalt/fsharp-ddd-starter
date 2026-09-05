@@ -19,7 +19,10 @@ module private TestApp =
 
             try
                 use app =
-                    Program.buildApp [||] (fun webHost -> webHost.UseTestServer() |> ignore) (Some databasePath)
+                    Program.buildApp
+                        [| "--environment"; "Development" |]
+                        (fun webHost -> webHost.UseTestServer() |> ignore)
+                        (Some databasePath)
 
                 do! app.StartAsync()
                 use client = app.GetTestClient()

@@ -37,3 +37,12 @@ dotnet build "$solution" --configuration Release --no-restore
 
 echo "==> Run domain, application, SQLite integration, web, property, and architecture tests"
 dotnet test "$solution" --configuration Release --no-build --no-restore
+
+echo "==> Run encrypted local backup/restore and failure tests (no cloud access)"
+mise exec -- ./ops/backup/test.sh
+
+echo "==> Validate private R2 infrastructure example (mocked provider, no cloud access)"
+mise exec -- tofu -chdir=examples/opentofu/backup-storage fmt -check -recursive
+mise exec -- tofu -chdir=examples/opentofu/backup-storage init -backend=false -input=false -lockfile=readonly
+mise exec -- tofu -chdir=examples/opentofu/backup-storage validate
+mise exec -- tofu -chdir=examples/opentofu/backup-storage test -no-color -filter=tests/privacy.tofutest.hcl

@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="dbup-core" Version="6.0.15" />
+    <PackageVersion Include="dbup-sqlite" Version="6.0.4" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.4.0" />
     <PackageVersion Include="FSharp.Core" Version="10.1.400" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
@@ -13,6 +15,7 @@
     <PackageVersion Include="Oxpecker" Version="2.1.1" />
     <PackageVersion Include="Oxpecker.ViewEngine" Version="2.1.0" />
     <PackageVersion Include="StarFederation.Datastar.FSharp" Version="1.4.0" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="2.1.12" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>

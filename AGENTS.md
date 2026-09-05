@@ -26,6 +26,20 @@ If a request says to "archive" a work item, stop before editing. The WorkTrackin
 - Do not add a cross-context `SharedKernel`, generic DDD base classes, mediator dispatch, CQRS, event sourcing, messaging, or a microservice without a current demonstrated need.
 - Adding an event store requires an ADR. See `docs/recipes/event-sourcing.md`.
 
+## Database and backup changes
+
+- Read `docs/persistence.md` and `docs/backup-and-restore.md` before changing migration or recovery behavior.
+- Keep SQL scripts and logical migration identifiers immutable after application. Add forward migrations rather than editing history.
+- Preserve logical identifiers during namespace or assembly renames. Require UTF-8 without a byte-order mark and LF line endings.
+- Test schema, data, and journal rollback against real SQLite. Do not assume DbUp's default transaction configuration is safe.
+- Keep vendor-characterization tests separate from the starter's stronger atomicity guarantees.
+- Never adopt a legacy database, delete recovery points, replace live data, or access real R2 storage as an incidental test step.
+- Keep production database paths explicit. Only an authorized first deployment can create a missing production database.
+- Run real local restic round-trips and failure tests. Do not describe local tests or storage mocks as verified R2 integration.
+- Preserve successful recovery points, explicit storage budgets, and redacted failures. Budget checks are not a hard billing cap.
+- Infrastructure examples do not authorize provisioning. Production access and live R2 tests require separate approval.
+- Do not introduce multiple application instances or downtime-free deployment under an unrelated migration change.
+
 ## Review questions
 
 Use `docs/review-checklist.md` and answer its questions in the pull request. In particular: which bounded context owns the change, which scenario changed, and did a transport or persistence shape leak into Domain?

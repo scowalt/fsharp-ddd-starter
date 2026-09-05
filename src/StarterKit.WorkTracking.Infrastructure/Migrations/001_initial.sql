@@ -9,5 +9,3 @@ CREATE TABLE work_items (
         OR (state = 'completed' AND completed_at IS NOT NULL)
     )
 );
-
-PRAGMA user_version = 1;

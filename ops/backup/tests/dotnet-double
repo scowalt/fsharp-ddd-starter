@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Deliberately NOT SQLite: a process double for deterministic orchestration tests.
+set -euo pipefail
+# SQLite operations must not receive storage credentials they do not need.
+[[ -z ${RESTIC_PASSWORD:-} && -z ${AWS_SECRET_ACCESS_KEY:-} ]] || exit 1
+if [[ $2 == --snapshot-db ]]; then
+  cp -- "$3" "$4"
+  file=$4
+  operation=snapshot
+else
+  file=$3
+  operation=validate
+fi
+jq -n --arg op "$operation" --arg hash "$(sha256sum "$file" | cut -d' ' -f1)" --argjson size "$(stat -c %s "$file")" '{operation:$op,integrity:"ok",foreignKeys:"ok",sizeBytes:$size,sha256:$hash,migrationHistory:[]}'

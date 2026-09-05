@@ -1,0 +1,2 @@
+# Migration checksums cover exact embedded UTF-8 bytes. Never rewrite applied SQL.
+*.sql text eol=lf

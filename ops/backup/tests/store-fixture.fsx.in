@@ -1,0 +1,59 @@
+// Copied to the private test directory and run with the built application's libraries.
+#r "Microsoft.Data.Sqlite.dll"
+#r "SQLitePCLRaw.core.dll"
+#r "SQLitePCLRaw.batteries_v2.dll"
+#r "StarterKit.WorkTracking.Domain.dll"
+#r "StarterKit.WorkTracking.Application.dll"
+#r "StarterKit.WorkTracking.Infrastructure.dll"
+
+open System
+open System.IO
+open System.Threading
+open Microsoft.Data.Sqlite
+open StarterKit.WorkTracking.Domain
+open StarterKit.WorkTracking.Infrastructure
+
+let require = function
+    | Ok value -> value
+    | Error error -> failwithf "Fixture operation failed: %A" error
+
+SQLitePCL.Batteries_V2.Init()
+let args = fsi.CommandLineArgs |> Array.skip 1
+let connectionString = $"Data Source={args[1]};Foreign Keys=True;Pooling=False"
+let store = SqliteWorkItemStore.create connectionString
+let id = Guid.Parse "16ae11ea-6e87-43c7-97ac-b660e82bfb55" |> WorkItemId.create |> require
+let title = "Recovered through the real store"
+let at = DateTimeOffset.Parse "2026-09-05T12:00:00Z"
+
+match args[0] with
+| "create-wal" ->
+    SqliteMigrations.run connectionString (Embedded typeof<MigrationScript>.Assembly)
+    |> require
+    |> ignore
+    use keeper = new SqliteConnection(connectionString)
+    keeper.Open()
+    use command = keeper.CreateCommand()
+    command.CommandText <- "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;"
+    command.ExecuteNonQuery() |> ignore
+    use readTransaction = keeper.BeginTransaction(deferred = true)
+    command.Transaction <- readTransaction
+    command.CommandText <- "SELECT COUNT(*) FROM work_items;"
+    command.ExecuteScalar() |> ignore
+    let item = WorkItem.create id (WorkItemTitle.create title |> require) at
+    store.Save item CancellationToken.None |> _.GetAwaiter().GetResult() |> require
+    if FileInfo(args[1] + "-wal").Length = 0L then failwith "WAL fixture is empty"
+    File.WriteAllText(args[2], "ready")
+    let deadline = DateTime.UtcNow.AddMinutes 2.0
+    while not (File.Exists args[3]) && DateTime.UtcNow < deadline do
+        Thread.Sleep 50
+    if not (File.Exists args[3]) then failwith "WAL fixture controller timed out"
+| "read" ->
+    let item =
+        store.Load id CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+        |> require
+        |> Option.defaultWith (fun () -> failwith "Work item missing after restore")
+    if WorkItem.title item |> WorkItemTitle.value <> title then failwith "Restored title differs"
+    if WorkItem.createdAt item <> at || WorkItem.state item <> Open then failwith "Restored state differs"
+    printfn "PASS: restored application data read through SqliteWorkItemStore.Load"
+| _ -> failwith "Unknown fixture command"
