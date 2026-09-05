@@ -12,4 +12,12 @@ artifacts/
 TestResults/
 .coverage/
 .env
+.env.*
+!.env.example
 .DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json

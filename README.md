@@ -40,15 +40,49 @@ mise run setup
 mise run validate
 ```
 
-The local pre-commit path runs Fantomas and Gitleaks. CI runs formatting, asset-integrity, locked restore, build, all tests, architecture checks, and Trivy.
+The local pre-commit path runs Fantomas and Gitleaks. CI runs formatting, asset integrity, locked restore, build, .NET and local backup tests, architecture checks, OpenTofu example validation, and Trivy.
+
+`mise install` supplies the pinned restic, rclone, jq, and OpenTofu tools used by the backup helper and validation suite. Local tests do not access R2.
 
 ## Run the sample
 
+Use Portless with private Tailscale sharing on a shared development machine:
+
 ```bash
-dotnet run --project src/StarterKit.Web
+portless run --tailscale sh -c 'ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/StarterKit.Web -- --urls "http://127.0.0.1:$PORT"'
 ```
 
-The SQLite file is created at `src/StarterKit.Web/data/worktracking.db`. Set normal ASP.NET Core URL configuration as needed for your environment.
+In another terminal, run `portless list` and use its reported local and private Tailscale URLs.
+Do not select a shared backend port or use a public tunnel if private sharing is unavailable.
+
+Development creates the SQLite sample at `src/StarterKit.Web/data/worktracking.db`.
+Startup validates migration checksums and runs pending DbUp SQL before serving requests.
+The old starter's databases without DbUp history are refused rather than silently adopted or deleted.
+
+## Production and database operations
+
+Use an explicit absolute `DATABASE_PATH` in production.
+For a first deployment only, set `ALLOW_DATABASE_CREATE=true` to authorize creating a missing database.
+Remove that flag for ordinary deployments so an incorrect path cannot create a replacement database.
+
+The deployment controller stops the old instance, completes a backup, and starts the new instance.
+The new instance applies migrations in one transaction before accepting requests.
+Deployments without migrations still have backup and stop/start downtime.
+Downtime-free deployment is future work.
+
+The backup helper invokes non-serving SQLite operations in the same artifact:
+
+```bash
+dotnet src/StarterKit.Web/bin/Release/net10.0/StarterKit.Web.dll --snapshot-db /absolute/live.db /private/staging/snapshot.db
+dotnet src/StarterKit.Web/bin/Release/net10.0/StarterKit.Web.dll --validate-db /private/staging/snapshot.db
+```
+
+These commands do not run migrations or start HTTP.
+Snapshot capture refuses an existing destination, and validation does not create missing files.
+
+See [persistence](docs/persistence.md), [backup and restore](docs/backup-and-restore.md), and the [helper command reference](ops/backup/README.md).
+The [private R2 OpenTofu example](examples/opentofu/backup-storage/README.md) creates no resources until an authorized application adopts it.
+A live R2 backup/restore drill is required before production adoption; local tests alone do not prove remote compatibility.
 
 ## Architecture
 

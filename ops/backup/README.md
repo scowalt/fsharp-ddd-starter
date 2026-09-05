@@ -134,6 +134,8 @@ It does not capture the database or prove that the next backup fits.
 The deployment controller must also make sure that its database path, application DLL, and release artifact are correct before downtime.
 
 `backup` requires an existing database and an explicit release identifier.
+That identifier names the source application version compatible with the pre-migration database, not automatically the incoming release.
+The deployment controller records the incoming release separately.
 It captures SQLite through `dotnet "$APP_DLL" --snapshot-db SOURCE DEST`.
 It then calls `dotnet "$APP_DLL" --validate-db DEST`.
 Both operations must return matching integrity, foreign-key, size, SHA-256, and migration-history metadata.
@@ -252,8 +254,10 @@ Nothing in the original helper state directory is a recovery credential.
 6. Run `restore` into a new isolated directory.
 7. Review the reported release, migration history, and application data.
 8. Stop the application before any live-file replacement.
-9. Preserve the current database and all associated WAL/SHM files as a separate recovery set.
+9. Move the current database and associated WAL/SHM/journal files together into a separate private recovery directory.
 10. Require explicit operator confirmation before replacing live data through the application's documented recovery procedure.
+
+Do not leave old SQLite sidecars at the replacement path. They do not belong to the restored standalone database.
 
 The helper intentionally supplies no live-file replacement command.
 After a schema change, use a compatible forward release with the complete migration catalogue.
