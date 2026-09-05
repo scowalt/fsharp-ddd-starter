@@ -5,6 +5,7 @@ open System.IO
 open System.Globalization
 open System.Text.RegularExpressions
 open System.Security.Cryptography
+open System.Runtime.InteropServices
 open Microsoft.Data.Sqlite
 
 type DatabaseHistoryEntry =
@@ -84,12 +85,14 @@ module SqliteDatabaseOperations =
                 raise (DatabaseOperationRejected InvalidDatabase)
 
         command.CommandText <-
-            "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = '__migration_history';"
+            "SELECT COUNT(*) FROM main.sqlite_schema WHERE type = 'table' AND name = '__migration_history';"
 
         if command.ExecuteScalar() :?> int64 = 0L then
             [||]
         else
-            command.CommandText <- "SELECT sequence, id, sha256, applied_at FROM __migration_history ORDER BY sequence;"
+            command.CommandText <-
+                "SELECT sequence, id, sha256, applied_at FROM main.__migration_history ORDER BY sequence;"
+
             use reader = command.ExecuteReader()
             let history = ResizeArray<DatabaseHistoryEntry>()
 
@@ -151,65 +154,91 @@ module SqliteDatabaseOperations =
         | :? SqliteException -> Error InvalidDatabase
         | _ -> Error DatabaseOperationFailed
 
-    let snapshot source destination =
-        let mutable created = false
+    let private requireAbsentDestination destination =
+        for suffix in [ ""; "-journal"; "-wal"; "-shm" ] do
+            let exists =
+                try
+                    // GetAttributes observes the link itself, including dangling symlinks.
+                    // Only absence is accepted; access and other I/O errors fail closed.
+                    File.GetAttributes(destination + suffix) |> ignore
+                    true
+                with
+                | :? FileNotFoundException
+                | :? DirectoryNotFoundException -> false
 
-        try
-            if File.Exists destination || Directory.Exists destination then
+            if exists then
                 raise (DatabaseOperationRejected DestinationExists)
 
-            use connection = openReadOnly source
-            use transaction = connection.BeginTransaction(deferred = true)
-            check connection transaction |> ignore
+    // Directory.CreateDirectory accepts existing directories. mkdir instead gives us
+    // exclusive ownership, including in the unlikely event of a random-name collision.
+    module private NativeDirectory =
+        [<DllImport("libc", EntryPoint = "mkdir", CharSet = CharSet.Ansi)>]
+        extern int create(string path, uint32 mode)
+
+    let snapshot source destination =
+        try
+            let destination = Path.GetFullPath destination
+            requireAbsentDestination destination
 
             if OperatingSystem.IsWindows() then
                 raise (DatabaseOperationRejected PrivatePermissionsUnavailable)
 
-            let options =
-                FileStreamOptions(
-                    Mode = FileMode.CreateNew,
-                    Access = FileAccess.Write,
-                    Share = FileShare.None,
-                    UnixCreateMode = Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-                )
+            let staging =
+                Path.Combine(Path.GetDirectoryName destination, $".sqlite-snapshot-{Guid.NewGuid():N}")
 
-            do
-                use reserved = new FileStream(destination, options)
-                created <- true
+            if NativeDirectory.create (staging, 0o700u) <> 0 then
+                raise (IOException("Could not allocate private snapshot staging."))
 
-            do
-                let settings =
-                    SqliteConnectionStringBuilder(
-                        DataSource = destination,
-                        Mode = SqliteOpenMode.ReadWrite,
-                        Pooling = false,
-                        DefaultTimeout = 2
+            try
+                let stagedFile = Path.Combine(staging, "database.sqlite3")
+                use connection = openReadOnly source
+                use transaction = connection.BeginTransaction(deferred = true)
+                check connection transaction |> ignore
+
+                let options =
+                    FileStreamOptions(
+                        Mode = FileMode.CreateNew,
+                        Access = FileAccess.Write,
+                        Share = FileShare.None,
+                        UnixCreateMode = Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
                     )
 
-                use target = new SqliteConnection(settings.ConnectionString)
-                target.Open()
-                connection.BackupDatabase target
-                // BackupDatabase preserves the source's WAL header. Normalize ONLY the
-                // isolated destination so read-only restore checks need no sidecars and
-                // its main-file hash describes the complete recovery snapshot.
-                use standalone = target.CreateCommand()
-                standalone.CommandText <- "PRAGMA journal_mode=DELETE;"
+                do
+                    use reserved = new FileStream(stagedFile, options)
+                    ()
 
-                if standalone.ExecuteScalar() :?> string <> "delete" then
-                    raise (DatabaseOperationRejected InvalidDatabase)
+                do
+                    let settings =
+                        SqliteConnectionStringBuilder(
+                            DataSource = stagedFile,
+                            Mode = SqliteOpenMode.ReadWrite,
+                            Pooling = false,
+                            DefaultTimeout = 2
+                        )
 
-            match validate destination with
-            | Ok report -> Ok report
-            | Error error -> raise (DatabaseOperationRejected error)
-        with ex ->
-            if created then
-                for suffix in [ ""; "-journal"; "-wal"; "-shm" ] do
-                    try
-                        File.Delete(destination + suffix)
-                    with _ ->
-                        ()
+                    use target = new SqliteConnection(settings.ConnectionString)
+                    target.Open()
+                    connection.BackupDatabase target
+                    // Normalize ONLY our private snapshot, never the read-only source.
+                    use standalone = target.CreateCommand()
+                    standalone.CommandText <- "PRAGMA journal_mode=DELETE;"
 
-            match ex with
-            | DatabaseOperationRejected error -> Error error
-            | :? SqliteException -> Error InvalidDatabase
-            | _ -> Error DatabaseOperationFailed
+                    if standalone.ExecuteScalar() :?> string <> "delete" then
+                        raise (DatabaseOperationRejected InvalidDatabase)
+
+                match validate stagedFile with
+                | Ok report ->
+                    // Capture may take time. Refuse entries that appeared since preflight,
+                    // and retain no-overwrite promotion even after this second check.
+                    requireAbsentDestination destination
+                    File.Move(stagedFile, destination, false)
+                    Ok report
+                | Error error -> raise (DatabaseOperationRejected error)
+            finally
+                // Every path SQLite could have created is inside this exclusively owned
+                // directory. Never delete destination companions belonging to another call.
+                Directory.Delete(staging, true)
+        with
+        | DatabaseOperationRejected error -> Error error
+        | :? SqliteException -> Error InvalidDatabase
+        | _ -> Error DatabaseOperationFailed

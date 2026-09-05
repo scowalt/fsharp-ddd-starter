@@ -283,6 +283,41 @@ type MigrationTests() =
         Assert.Equal(Error InvalidHistory, run db [ first; next ])
         Assert.Equal<byte>(before, File.ReadAllBytes db.Path)
 
+    [<Theory>]
+    [<InlineData(true)>]
+    [<InlineData(false)>]
+    member _.``temporary journal names cannot divert durable history or cause migrations to rerun``
+        (matchingColumns: bool)
+        =
+        use db = new Database()
+        run db [ first ] |> success |> ignore
+
+        let temporaryJournal =
+            if matchingColumns then
+                "CREATE TEMP TABLE __migration_history (sequence INTEGER PRIMARY KEY NOT NULL, id TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT; INSERT INTO temp.__migration_history SELECT * FROM main.__migration_history;"
+            else
+                "CREATE TEMP TABLE __migration_history (unrelated TEXT);"
+
+        let next =
+            script
+                "worktracking/002_temporary.sql"
+                ($"{temporaryJournal} INSERT INTO main.sample VALUES ('applied once');\n")
+
+        Assert.Equal<string list>([ next.Id ], (run db [ first; next ] |> success).Applied)
+
+        let historyBeforeRestart =
+            db.Query("SELECT COUNT(*) FROM main.__migration_history;") :?> int64
+
+        let restarted = run db [ first; next ] |> success
+
+        let historyAfterRestart =
+            db.Query("SELECT COUNT(*) FROM main.__migration_history;") :?> int64
+
+        let applications =
+            db.Query("SELECT COUNT(*) FROM main.sample WHERE value = 'applied once';") :?> int64
+
+        Assert.Equal((2L, 2L, 1L, []), (historyBeforeRestart, historyAfterRestart, applications, restarted.Applied))
+
     [<Fact>]
     member _.``concurrent migration attempts acquire the write lock before reading history``() =
         use db = new Database()

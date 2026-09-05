@@ -68,18 +68,19 @@ module private MigrationJournal =
                         guard failure (fun () ->
                             // DbUp begins Microsoft's non-deferred write transaction before this callback.
                             // Never read history using a separate connection or before acquiring that lock.
-                            let version = scalar factory "PRAGMA user_version;" :?> int64
+                            // TEMP objects must never shadow the persistent journal or its schema.
+                            let version = scalar factory "PRAGMA main.user_version;" :?> int64
 
                             let journalExists =
                                 scalar
                                     factory
-                                    "SELECT COUNT(*) FROM sqlite_schema WHERE name = '__migration_history' AND type = 'table';"
+                                    "SELECT COUNT(*) FROM main.sqlite_schema WHERE name = '__migration_history' AND type = 'table';"
                                 :?> int64 = 1L
 
                             let hasSchema =
                                 scalar
                                     factory
-                                    "SELECT COUNT(*) FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*' AND name <> '__migration_history';"
+                                    "SELECT COUNT(*) FROM main.sqlite_schema WHERE name NOT GLOB 'sqlite_*' AND name <> '__migration_history';"
                                 :?> int64 > 0L
 
                             if version <> 0L || (not journalExists && hasSchema) then
@@ -88,17 +89,17 @@ module private MigrationJournal =
                             if not journalExists then
                                 execute
                                     factory
-                                    "CREATE TABLE __migration_history (sequence INTEGER PRIMARY KEY NOT NULL, id TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT;"
+                                    "CREATE TABLE main.__migration_history (sequence INTEGER PRIMARY KEY NOT NULL, id TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT;"
 
                             if
                                 hasSchema
-                                && (scalar factory "SELECT COUNT(*) FROM __migration_history;" :?> int64 = 0L)
+                                && (scalar factory "SELECT COUNT(*) FROM main.__migration_history;" :?> int64 = 0L)
                             then
                                 raise (MigrationRejected LegacyDatabase)
 
                             try
                                 use schema = factory.Invoke()
-                                schema.CommandText <- "PRAGMA table_info('__migration_history');"
+                                schema.CommandText <- "PRAGMA main.table_info('__migration_history');"
                                 let columns = ResizeArray<_>()
 
                                 do
@@ -124,7 +125,7 @@ module private MigrationJournal =
                                 use command = factory.Invoke()
 
                                 command.CommandText <-
-                                    "SELECT sequence, id, sha256, applied_at FROM __migration_history ORDER BY sequence;"
+                                    "SELECT sequence, id, sha256, applied_at FROM main.__migration_history ORDER BY sequence;"
 
                                 use reader = command.ExecuteReader()
                                 let ids = ResizeArray<string>()
@@ -169,7 +170,7 @@ module private MigrationJournal =
                 use command = factory.Invoke()
 
                 command.CommandText <-
-                    "INSERT INTO __migration_history(sequence, id, sha256, applied_at) VALUES ($sequence, $id, $hash, $at);"
+                    "INSERT INTO main.__migration_history(sequence, id, sha256, applied_at) VALUES ($sequence, $id, $hash, $at);"
 
                 parameter command "$sequence" (box (index + 1))
                 parameter command "$id" script.Name

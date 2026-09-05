@@ -27,7 +27,7 @@ module OperationalFixture =
         command.CommandText <- sql
         command.ExecuteScalar()
 
-    let cli cwd args =
+    let cliWithInspection cwd args inspect =
         let start =
             ProcessStartInfo(
                 "dotnet",
@@ -46,11 +46,19 @@ module OperationalFixture =
         let stdout = child.StandardOutput.ReadToEndAsync()
         let stderr = child.StandardError.ReadToEndAsync()
 
-        if not (child.WaitForExit(15000)) then
-            child.Kill(true)
-            failwith "Database CLI exceeded its test deadline."
+        try
+            inspect child
 
-        child.ExitCode, stdout.Result, stderr.Result
+            if not (child.WaitForExit(15000)) then
+                failwith "Database CLI exceeded its test deadline."
+
+            child.ExitCode, stdout.Result, stderr.Result
+        finally
+            if not child.HasExited then
+                child.Kill(true)
+                child.WaitForExit()
+
+    let cli cwd args = cliWithInspection cwd args ignore
 
 open OperationalFixture
 
@@ -171,6 +179,156 @@ type OperationalTests() =
         Assert.NotEqual(0, code)
         Assert.Equal("", stdout)
         Assert.Equal("must survive", File.ReadAllText destination)
+
+    [<Theory>]
+    [<InlineData("-journal", "file")>]
+    [<InlineData("-journal", "directory")>]
+    [<InlineData("-journal", "symlink")>]
+    [<InlineData("-wal", "file")>]
+    [<InlineData("-wal", "directory")>]
+    [<InlineData("-wal", "symlink")>]
+    [<InlineData("-shm", "file")>]
+    [<InlineData("-shm", "directory")>]
+    [<InlineData("-shm", "symlink")>]
+    [<InlineData("", "directory")>]
+    [<InlineData("", "symlink")>]
+    member _.``snapshot refuses existing destination entries including dangling companion symlinks``
+        (suffix: string, kind: string)
+        =
+        use fixture = new DirectoryFixture()
+        let source = fixture.File "source.db"
+        let destination = fixture.File "snapshot.db"
+        let occupied = destination + suffix
+        let missingTarget = fixture.File "must-stay-missing"
+        execute source "CREATE TABLE sample(value TEXT);" |> ignore
+        let sourceBefore = File.ReadAllBytes source
+
+        match kind with
+        | "directory" ->
+            Directory.CreateDirectory occupied |> ignore
+            File.WriteAllText(Path.Combine(occupied, "existing"), "must survive")
+        | "symlink" -> File.CreateSymbolicLink(occupied, missingTarget) |> ignore
+        | _ -> File.WriteAllText(occupied, "must survive")
+
+        let code, stdout, stderr = cli fixture.Path [ "--snapshot-db"; source; destination ]
+
+        match kind with
+        | "directory" -> Assert.Equal("must survive", File.ReadAllText(Path.Combine(occupied, "existing")))
+        | "symlink" ->
+            Assert.Equal(missingTarget, FileInfo(occupied).LinkTarget)
+            Assert.False(File.Exists missingTarget)
+        | _ -> Assert.Equal("must survive", File.ReadAllText occupied)
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+        Assert.Contains("DestinationExists", stderr)
+
+        if suffix <> "" then
+            Assert.False(File.Exists destination)
+
+        Assert.Equal<byte>(sourceBefore, File.ReadAllBytes source)
+
+    [<Fact>]
+    member _.``snapshot failure never deletes pre-existing companions it does not own``() =
+        use fixture = new DirectoryFixture()
+        let source = fixture.File "source.db"
+        let destination = fixture.File "snapshot.db"
+        execute source "CREATE TABLE sample(value TEXT);" |> ignore
+        // On the old path the journal directory makes SQLite fail after creating the
+        // destination, then cleanup deletes the unrelated WAL and SHM files.
+        Directory.CreateDirectory(destination + "-journal") |> ignore
+        File.WriteAllText(destination + "-wal", "existing WAL")
+        File.WriteAllText(destination + "-shm", "existing SHM")
+        let code, stdout, _ = cli fixture.Path [ "--snapshot-db"; source; destination ]
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+        Assert.Equal("existing WAL", File.ReadAllText(destination + "-wal"))
+        Assert.Equal("existing SHM", File.ReadAllText(destination + "-shm"))
+        Assert.True(Directory.Exists(destination + "-journal"))
+        Assert.False(File.Exists destination)
+
+    [<Theory>]
+    [<InlineData("-journal", "file", true)>]
+    [<InlineData("-wal", "directory", true)>]
+    [<InlineData("-shm", "symlink", true)>]
+    [<InlineData("", "file", true)>]
+    [<InlineData("-wal", "file", false)>]
+    member _.``snapshot owns failure cleanup and rechecks paths appearing during capture``
+        (suffix: string, kind: string, finishCapture: bool)
+        =
+        use fixture = new DirectoryFixture()
+        let source = fixture.File "source.db"
+        let outputDirectory = fixture.File "output"
+        Directory.CreateDirectory outputDirectory |> ignore
+        let destination = Path.Combine(outputDirectory, "snapshot.db")
+        let occupied = destination + suffix
+        let missingTarget = fixture.File "must-stay-missing"
+
+        execute source "CREATE TABLE sample(value TEXT); INSERT INTO sample VALUES ('unchanged');"
+        |> ignore
+
+        let sourceBefore = File.ReadAllBytes source
+
+        use blocker =
+            new SqliteConnection(SqliteConnectionStringBuilder(DataSource = source, Pooling = false).ConnectionString)
+
+        blocker.Open()
+        use command = blocker.CreateCommand()
+        command.CommandText <- "BEGIN EXCLUSIVE;"
+        command.ExecuteNonQuery() |> ignore
+
+        let inspect (child: Process) =
+            // An actual SQLite lock pauses capture after its initial path check. Observe
+            // owned staging, then inject filesystem changes through the public CLI seam.
+            let timer = Stopwatch.StartNew()
+
+            while not child.HasExited
+                  && timer.Elapsed < TimeSpan.FromSeconds(5.0)
+                  && Directory.GetDirectories(outputDirectory).Length = 0 do
+                System.Threading.Thread.Sleep 5
+
+            Assert.False(child.HasExited, "Capture exited before owned staging could be observed.")
+            let staging = Assert.Single(Directory.GetDirectories(outputDirectory))
+
+            Assert.Equal(
+                UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute,
+                File.GetUnixFileMode staging
+            )
+
+            Assert.False(File.Exists destination)
+
+            match kind with
+            | "directory" ->
+                Directory.CreateDirectory occupied |> ignore
+                File.WriteAllText(Path.Combine(occupied, "existing"), "must survive")
+            | "symlink" -> File.CreateSymbolicLink(occupied, missingTarget) |> ignore
+            | _ -> File.WriteAllText(occupied, "must survive")
+
+            if finishCapture then
+                command.CommandText <- "ROLLBACK;"
+                command.ExecuteNonQuery() |> ignore
+
+        let code, stdout, stderr =
+            cliWithInspection fixture.Path [ "--snapshot-db"; source; destination ] inspect
+
+        match kind with
+        | "directory" -> Assert.Equal("must survive", File.ReadAllText(Path.Combine(occupied, "existing")))
+        | "symlink" ->
+            Assert.Equal(missingTarget, FileInfo(occupied).LinkTarget)
+            Assert.False(File.Exists missingTarget)
+        | _ -> Assert.Equal("must survive", File.ReadAllText occupied)
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", stdout)
+
+        if finishCapture then
+            Assert.Contains("DestinationExists", stderr)
+
+        if suffix <> "" then
+            Assert.False(File.Exists destination)
+
+        Assert.Equal<string>([| occupied |], Directory.GetFileSystemEntries(outputDirectory))
+        Assert.Equal<byte>(sourceBefore, File.ReadAllBytes source)
 
     [<Fact>]
     member _.``snapshot metadata identifies journal history without exposing work item data``() =
