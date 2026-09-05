@@ -57,6 +57,37 @@ type DependencyTests() =
             application
 
     [<Fact>]
+    member _.``Domain and Application have no migration SQLite or backup-storage dependencies``() =
+        let forbiddenPrefixes =
+            [ "dbup"
+              "Microsoft.Data.Sqlite"
+              "SQLitePCLRaw"
+              "AWSSDK"
+              "Azure.Storage"
+              "Minio"
+              "Restic" ]
+
+        for assembly in [ domain; application ] do
+            let violations =
+                DependencyRules.references assembly
+                |> Set.filter (fun name ->
+                    forbiddenPrefixes
+                    |> List.exists (fun prefix -> name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+
+            Assert.True(
+                Set.isEmpty violations,
+                $"Persistence/operations dependencies leaked into {assembly.GetName().Name}: {violations}"
+            )
+
+    [<Fact>]
+    member _.``Infrastructure owns DbUp while Web exposes only migration and operational results``() =
+        let infrastructureReferences = DependencyRules.references infrastructure
+        Assert.Contains("dbup-core", infrastructureReferences)
+        Assert.Contains("dbup-sqlite", infrastructureReferences)
+        Assert.DoesNotContain("dbup-core", DependencyRules.references web)
+        Assert.DoesNotContain("dbup-sqlite", DependencyRules.references web)
+
+    [<Fact>]
     member _.``Infrastructure does not depend on Web``() =
         let references = DependencyRules.references infrastructure
         Assert.Contains(application.GetName().Name, references)

@@ -2,10 +2,18 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../StarterKit.WorkTracking.Application.Tests/UseCaseContract.fs" Link="UseCaseContract.fs" />
     <Compile Include="SqliteWorkItemStoreTests.fs" />
+    <Compile Include="DbUpTransactionProof.fs" />
+    <Compile Include="MigrationTests.fs" />
+    <Compile Include="MigrationProcess.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures/legacy_v1.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />

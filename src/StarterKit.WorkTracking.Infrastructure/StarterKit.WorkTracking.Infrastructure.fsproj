@@ -1,12 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <Compile Include="SqliteMigrations.fs" />
+    <Compile Include="SqliteDatabaseOperations.fs" />
     <Compile Include="SqliteWorkItemStore.fs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Migrations/*.sql" />
+    <!-- Generated once. Do not change this logical context identity after deployment. -->
+    <EmbeddedResource Include="Migrations/*.sql" LogicalName="migration.worktracking.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="dbup-core" />
+    <PackageReference Include="dbup-sqlite" />
+    <PackageReference Include="SQLitePCLRaw.core" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../StarterKit.WorkTracking.Application/StarterKit.WorkTracking.Application.fsproj" />

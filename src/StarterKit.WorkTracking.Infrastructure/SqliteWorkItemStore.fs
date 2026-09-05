@@ -3,9 +3,6 @@ namespace StarterKit.WorkTracking.Infrastructure
 open System
 open System.Data
 open System.Globalization
-open System.IO
-open System.Reflection
-open System.Threading
 open System.Threading.Tasks
 open Microsoft.Data.Sqlite
 open StarterKit.WorkTracking.Application
@@ -78,40 +75,6 @@ module SqliteWorkItemStore =
             let connection = new SqliteConnection(connectionString)
             do! connection.OpenAsync(cancellationToken)
             return connection
-        }
-
-    let initialize connectionString cancellationToken : Task<Result<unit, StoreError>> =
-        task {
-            try
-                use! connection = openConnection connectionString cancellationToken
-                use versionCommand = connection.CreateCommand()
-                versionCommand.CommandText <- "PRAGMA user_version;"
-                let! rawVersion = versionCommand.ExecuteScalarAsync(cancellationToken)
-                let version = Convert.ToInt32(rawVersion, CultureInfo.InvariantCulture)
-
-                match version with
-                | 1 -> return Ok()
-                | 0 ->
-                    let resourceName =
-                        "StarterKit.WorkTracking.Infrastructure.Migrations.001_initial.sql"
-
-                    use stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
-
-                    if isNull stream then
-                        return Error(StoreUnavailable $"Missing embedded migration: {resourceName}")
-                    else
-                        use reader = new StreamReader(stream)
-                        let! sql = reader.ReadToEndAsync(cancellationToken)
-                        use transaction = connection.BeginTransaction()
-                        use command = connection.CreateCommand()
-                        command.Transaction <- transaction
-                        command.CommandText <- sql
-                        let! _ = command.ExecuteNonQueryAsync(cancellationToken)
-                        transaction.Commit()
-                        return Ok()
-                | unsupported -> return Error(StoreUnavailable $"Unsupported database schema version: {unsupported}")
-            with ex ->
-                return Error(unavailable ex)
         }
 
     let create connectionString : WorkItemStore =
