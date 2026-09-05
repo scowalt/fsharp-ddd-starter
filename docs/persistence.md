@@ -62,6 +62,8 @@ New scripts inserted before applied history, duplicate identifiers, and changed 
 
 DbUp transactions are off by default, so explicit transaction configuration is mandatory.
 The checksum journal must use the transaction's connection and command factory.
+Qualify journal operations and schema inspection with `main` so temporary tables cannot redirect persistent history.
+Temporary tables remain available for migration work.
 SQLite schema, data, and history are all part of the migration operation's persistent output.
 
 The pinned DbUp implementation has a preprocessing failure path that can return failure after earlier work commits.

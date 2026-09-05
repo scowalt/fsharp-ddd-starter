@@ -54,6 +54,7 @@ Doppler supplies the following process environment values:
 - `AWS_ACCESS_KEY_ID`: bucket-scoped R2 object access key
 - `AWS_SECRET_ACCESS_KEY`: corresponding secret
 
+Generate a unique high-entropy recovery password for each repository and store it in Doppler.
 Use region `auto` for R2's S3-compatible endpoint.
 Keep infrastructure administration credentials separate from backup runtime credentials.
 Do not put secret values into helper JSON, shell arguments, logs, or repository files.
@@ -84,6 +85,9 @@ Record the incoming release separately in deployment logs.
 The helper uses the existing SQLite library to create a consistent snapshot.
 It does not copy an active database while ignoring its write-ahead log.
 Non-serving snapshot and validation entry points never run migrations or open an HTTP listener.
+Snapshot capture refuses existing destination files or SQLite sidecars, including dangling links.
+It writes into an exclusively created private sibling directory, validates the standalone database, then moves only that database into place without overwrite.
+Failure cleanup removes only that invocation's staging directory, never unrelated destination sidecars.
 
 If backup fails before database changes, the deployment controller can restart the old application.
 If a migration fails, startup must fail and the complete pending batch must roll back.
