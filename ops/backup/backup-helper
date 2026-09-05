@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+# Linux only. Service control and repository initialization belong to the operator.
+set +x
+set -Eeuo pipefail
+umask 077
+# Only fixed helper errors reach stderr; never forward tool output or paths.
+exec 3>&2 2>/dev/null
+export LC_ALL=C
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+fail() { printf '{"ok":false,"error":"%s"}\n' "$1" >&3; exit 1; }
+trap 'fail "unexpected helper failure; deployment must stop"' ERR
+[[ $# -ge 2 ]] || fail 'usage: backup-helper backup|check-storage|verify|restore CONFIG [RELEASE | SNAPSHOT DEST]'
+operation=$1
+config=$2
+command -v jq >/dev/null || fail 'required tool unavailable: jq'
+if [[ ! -f "$config" ]] || ! jq -se 'length == 1' "$config" >/dev/null || ! jq -e -f "$here/config.jq" "$config" >/dev/null; then
+  fail 'invalid explicit configuration'
+fi
+case "$operation:$#" in backup:3|check-storage:2|verify:2|restore:4) ;; *) fail 'invalid operation or arguments';; esac
+for tool in restic rclone flock timeout realpath stat du df mktemp; do
+  command -v "$tool" >/dev/null || fail "required tool unavailable: $tool"
+done
+app=$(jq -r .app "$config")
+environment=$(jq -r .environment "$config")
+database=$(jq -r .database "$config")
+stage=$(jq -r .staging_directory "$config")
+state=$(jq -r .state_directory "$config")
+repo_id=$(jq -r .repository_id "$config")
+remote_budget=$(jq -r .remote_budget_bytes "$config")
+local_budget=$(jq -r .local_budget_bytes "$config")
+lock_wait=$(jq -r .lock_wait_seconds "$config")
+operation_timeout=$(jq -r .operation_timeout_seconds "$config")
+repo_type=$(jq -r .repository.type "$config")
+[[ -n ${RESTIC_PASSWORD:-} ]] || fail 'RESTIC_PASSWORD must be injected through the environment'
+private_directory() {
+  [[ -d "$1" && ! -L "$1" && $(realpath -- "$1") == "$1" && $(stat -c %u -- "$1") == "$UID" && $(stat -c %a -- "$1") == 700 ]] || fail 'state and staging must be existing canonical owner-only directories (0700)'
+}
+private_directory "$stage"
+private_directory "$state"
+[[ "$stage" != "$state" && "$stage/" != "$state/"* && "$state/" != "$stage/"* ]] || fail 'state and staging must be separate directories'
+[[ $(realpath -m -- "$database") == "$database" && "$database" != "$stage/"* && "$database" != "$state/"* ]] || fail 'database must be canonical and outside helper directories'
+if [[ $repo_type == local ]]; then
+  repo=$(jq -r .repository.path "$config")
+  [[ -d "$repo" && $(realpath -- "$repo") == "$repo" && "$repo" != / ]] || fail 'local repository must already exist at a canonical path'
+  for path in "$state" "$stage" "$database"; do
+    [[ "$path/" != "$repo/"* && "$repo/" != "$path/"* ]] || fail 'local repository must not overlap database or helper directories'
+  done
+  inventory=":local:$repo"
+else
+  account=$(jq -r .repository.account_id "$config")
+  bucket=$(jq -r .repository.bucket "$config")
+  endpoint="https://$account.r2.cloudflarestorage.com"
+  repo="s3:$endpoint/$bucket/database"
+  inventory="r2:$bucket"
+  [[ -n ${AWS_ACCESS_KEY_ID:-} && -n ${AWS_SECRET_ACCESS_KEY:-} ]] || fail 'bucket-scoped AWS credentials must be injected through the environment'
+fi
+[[ ! -L "$state/workflow.lock" && ( ! -e "$state/workflow.lock" || -f "$state/workflow.lock" ) ]] || fail 'unsafe workflow lock file'
+exec 9>>"$state/workflow.lock"
+flock -w "$lock_wait" 9 || fail 'workflow lock wait expired; another helper may still be running'
+work=$(mktemp -d "$stage/.work.XXXXXXXX")
+restore_created=''
+cleanup() {
+  rm -rf -- "$work"
+  if [[ -n $restore_created ]]; then rm -rf -- "$restore_created"; fi
+}
+trap cleanup EXIT
+trap 'fail "helper interrupted; deployment must stop"' INT TERM HUP
+# Strip tool configuration, proxy overrides, password commands and application
+# settings. Secrets are exported in-shell, never put in process arguments.
+run() (
+  for name in $(compgen -e); do export -n "${name?}"; done
+  export PATH LC_ALL
+  export HOME="$work" TMPDIR="$work"
+  if [[ $1 == restic ]]; then export RESTIC_PASSWORD RESTIC_REPOSITORY="$repo"; fi
+  if [[ $repo_type == r2 && ( $1 == restic || $1 == rclone ) ]]; then
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
+    if [[ $1 == rclone ]]; then
+      export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare
+      export RCLONE_CONFIG_R2_ENV_AUTH=true RCLONE_CONFIG_R2_ENDPOINT="$endpoint"
+      export RCLONE_CONFIG_R2_REGION=auto RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+    fi
+  fi
+  export DOTNET_ROOT DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+  timeout --signal=TERM --kill-after=5 "$operation_timeout" "$@" 2>/dev/null
+)
+rs() { run restic --no-cache --retry-lock "${lock_wait}s" --stuck-request-timeout 30s "$@"; }
+rc() { run rclone --config /dev/null --retries 1 --low-level-retries 1 --contimeout 10s --timeout 30s "$@"; }
+[[ $(run restic version) == 'restic 0.19.1 '* ]] || fail 'required restic version: 0.19.1'
+[[ $(run rclone version) == 'rclone v1.75.1'$'\n'* ]] || fail 'required rclone version: 1.75.1'
+[[ $(jq --version) == jq-1.8.2 ]] || fail 'required jq version: 1.8.2'
+rs cat config >"$work/repository.json" || fail 'repository access failed; check credentials, keys, connectivity and locks; never auto-initialize'
+jq -e --arg id "$repo_id" '.id == $id and (.version == 1 or .version == 2)' "$work/repository.json" >/dev/null || fail 'repository identity mismatch'
+# Fixed 64 MiB metadata/pack allowance, plus double observed repository size for
+# maintenance overlap. These estimates are safeguards, NOT hard storage quotas.
+reserve=67108864
+number() { [[ "$1" =~ ^(0|[1-9][0-9]{0,15})$ && "$1" -le 1125899906842624 ]]; }
+local_check() {
+  local extra=$1 used available
+  used=$(du -sb -- "$stage" | cut -f1)
+  available=$(df -B1 --output=avail -- "$stage" | tail -1 | tr -d ' ')
+  if ! number "$used" || ! number "$available"; then fail 'local storage usage is unknown'; fi
+  local_usage=$used
+  (( used + extra + reserve <= local_budget && extra + reserve <= available )) || fail "local staging budget or free space exhausted: observed=$used extra=$extra reserve=$reserve budget=$local_budget available=$available bytes"
+}
+measure() {
+  rc size --json "$inventory" >"$work/usage.json" || fail 'repository inventory failed; usage is unknown'
+  usage=$(jq -er 'select(.sizeless == 0 and (.count | type == "number" and . >= 0 and . == floor)) | .bytes | select(type == "number" and . >= 0 and . == floor)' "$work/usage.json") || fail 'repository inventory malformed; usage is unknown'
+  number "$usage" || fail 'repository inventory outside supported range'
+  if [[ $repo_type == r2 ]]; then
+    rc backend list-multipart-uploads "$inventory" >"$work/multipart.json" || fail 'multipart inventory failed; usage is unknown'
+    jq -e --arg bucket "$bucket" 'type == "object" and keys == [$bucket] and .[$bucket] == []' "$work/multipart.json" >/dev/null || fail 'unfinished multipart uploads or unknown usage; wait for lifecycle cleanup and investigate'
+  fi
+  (( usage <= remote_budget )) || fail "repository storage budget exceeded: observed=$usage budget=$remote_budget bytes; deployment must stop"
+}
+report_storage() {
+  jq -n --argjson bytes "$usage" --argjson budget "$remote_budget" --argjson local "$local_usage" --argjson localBudget "$local_budget" '{ok:true,repository_bytes:$bytes,remote_budget_bytes:$budget,local_staging_bytes:$local,local_budget_bytes:$localBudget,hard_quota:false}'
+}
+snapshots() {
+  rs snapshots --json >"$work/snapshots.json" || fail 'snapshot listing failed'
+  jq -e --arg app "app:$app" --arg environment "environment:$environment" '
+    type == "array" and all(.[];
+      (.id | test("^[a-f0-9]{64}$")) and
+      ((.tags | sort) == (["backup-helper-v1",$app,$environment,"completed"] | sort)
+       or (.tags | sort) == (["backup-helper-v1",$app,$environment,"pending"] | sort)))
+  ' "$work/snapshots.json" >/dev/null || fail 'repository contains snapshots outside this application/environment helper contract'
+}
+validate_json() {
+  jq -e --arg operation "$2" '
+    .operation == $operation and .integrity == "ok" and .foreignKeys == "ok"
+    and (.sizeBytes | type == "number" and . >= 0 and . == floor)
+    and (.sha256 | type == "string" and test("^[a-f0-9]{64}$"))
+    and (.migrationHistory | type == "array" and all(.[];
+      (.id | type == "string") and (.sha256 | test("^[a-f0-9]{64}$")) and (.appliedAt | type == "string")))
+  ' "$1" >/dev/null || fail 'SQLite operation returned invalid integrity metadata'
+}
+standalone() {
+  # The .NET process has closed this private database. WAL-mode reads can leave
+  # empty sidecars; never ignore a nonempty WAL/journal or copy the live source.
+  [[ ! -s "$1-wal" && ! -s "$1-journal" ]] || fail 'isolated SQLite file has uncheckpointed data; refusing main-file-only backup or restore'
+  rm -f -- "$1-wal" "$1-shm" "$1-journal"
+}
+prune() {
+  # Separate command even if forget removed nothing: collect orphan packs left by
+  # interrupted uploads. No automatic unlock; restic owns repository safety.
+  rs prune --max-unused 0 --max-repack-size 0 >"$work/prune.txt" || fail 'repository prune failed; recovery points remain referenced; deployment must stop'
+}
+local_check 0
+measure
+if [[ $operation == backup || $operation == restore ]]; then
+  [[ ${APP_DLL:-} == /* && -f $APP_DLL && $(realpath -- "$APP_DLL") == "$APP_DLL" ]] || fail 'APP_DLL must name an existing canonical absolute application DLL'
+  command -v dotnet >/dev/null || fail 'required tool unavailable: dotnet'
+fi
+case "$operation" in
+  check-storage) local_check 0; report_storage ;;
+  backup)
+    release=$3
+    [[ $release =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$ ]] || fail 'release identifier must be 1-128 safe characters'
+    [[ -f "$database" && ! -L "$database" ]] || fail 'source database missing; initialization must be an explicit deployment-controller case'
+    source_bytes=$(stat -c %s -- "$database")
+    if [[ -e "$database-wal" ]]; then
+      wal_bytes=$(stat -c %s -- "$database-wal")
+      number "$wal_bytes" || fail 'source WAL size is unknown'
+      source_bytes=$((source_bytes + wal_bytes))
+    fi
+    number "$source_bytes" || fail 'source database size is unknown'
+    local_check "$((2 * source_bytes + 2 * usage))"
+    (( 2 * usage + 2 * source_bytes + reserve <= remote_budget )) || fail 'insufficient repository budget headroom for upload and maintenance'
+    snapshots
+    previous_completed=$(jq '[.[] | select(.tags | index("completed"))] | length' "$work/snapshots.json")
+    expected_completed=$(( previous_completed >= 1 ? 2 : 1 ))
+    rs check >"$work/check.txt" || fail 'repository structure check failed; deployment must stop'
+    # A crash or exit 3 can leave a pending snapshot. It is never a recovery point.
+    mapfile -t pending < <(jq -r '.[] | select(.tags | index("pending")) | .id' "$work/snapshots.json")
+    if (( ${#pending[@]} )); then
+      rs forget "${pending[@]}" >"$work/forget.txt" || fail 'failed-snapshot cleanup failed; deployment must stop'
+    fi
+    prune
+    measure
+    mkdir "$work/payload"
+    run dotnet "$APP_DLL" --snapshot-db "$database" "$work/payload/database.sqlite3" >"$work/capture.json" || fail 'SQLite capture failed; check source, DLL and timeout privately'
+    validate_json "$work/capture.json" snapshot
+    run dotnet "$APP_DLL" --validate-db "$work/payload/database.sqlite3" >"$work/validation.json" || fail 'SQLite snapshot validation failed'
+    validate_json "$work/validation.json" validate
+    standalone "$work/payload/database.sqlite3"
+    jq -e --slurpfile capture "$work/capture.json" 'del(.operation) == ($capture[0] | del(.operation))' "$work/validation.json" >/dev/null || fail 'SQLite snapshot integrity metadata changed after capture'
+    jq -n --arg app "$app" --arg environment "$environment" --arg release "$release" --slurpfile validation "$work/validation.json" '{format:1,app:$app,environment:$environment,release:$release,validation:$validation[0]}' >"$work/payload/metadata.json"
+    payload_bytes=$(du -sb -- "$work/payload" | cut -f1)
+    number "$payload_bytes" || fail 'captured snapshot size is unknown'
+    local_check "$((payload_bytes + 2 * usage))"
+    measure
+    (( 2 * usage + 2 * payload_bytes + reserve <= remote_budget )) || fail 'insufficient repository budget headroom after SQLite capture'
+    (cd "$work/payload"; rs backup --json --host "$app-$environment" --group-by '' --tag "backup-helper-v1,app:$app,environment:$environment,pending" database.sqlite3 metadata.json) >"$work/backup.json" || fail 'restic backup failed or incomplete; no recovery point promoted; deployment must stop'
+    snapshot=$(jq -ser '[.[] | select(.message_type == "summary") | .snapshot_id] | select(length == 1) | .[0] | select(test("^[a-f0-9]{64}$"))' "$work/backup.json") || fail 'restic returned no unambiguous completed upload identifier'
+    rs check >"$work/check.txt" || fail 'uploaded repository structure check failed; no recovery point promoted'
+    measure
+    local_check "$((2 * usage))"
+    (( 2 * usage + reserve <= remote_budget )) || fail 'insufficient repository headroom before retention'
+    rs tag --remove pending --add completed "$snapshot" >"$work/tag.txt" || fail 'snapshot promotion failed; deployment must stop'
+    snapshots
+    # tag rewrites the snapshot ID; original is recorded by restic, not a custom catalogue.
+    snapshot=$(jq -er --arg original "$snapshot" '[.[] | select((.id == $original or .original == $original) and (.tags | index("completed")))] | select(length == 1) | .[0].id' "$work/snapshots.json") || fail 'promoted snapshot identifier is ambiguous'
+    rs forget --tag "backup-helper-v1,app:$app,environment:$environment,completed" --group-by '' --keep-last 2 >"$work/forget.txt" || fail 'retention failed; deployment must stop'
+    prune
+    snapshots
+    jq -e --arg id "$snapshot" --argjson expected "$expected_completed" '
+      [.[] | select(.tags | index("completed"))] |
+      length == $expected and any(.[]; .id == $id)
+    ' "$work/snapshots.json" >/dev/null || fail 'retention postcondition failed; replacement snapshot missing or recovery-point count wrong; check clock and repository writers'
+    measure
+    local_check 0
+    jq -n --arg snapshot "$snapshot" --arg release "$release" --argjson bytes "$usage" --slurpfile validation "$work/validation.json" '{ok:true,snapshot_id:$snapshot,release:$release,validation:$validation[0],repository_bytes:$bytes,retention:"latest two completed; no host/path grouping",repository_verification:"structure only, not all stored bytes",hard_quota:false}'
+    ;;
+  verify)
+    snapshots
+    local_check "$((2 * usage))"
+    rs check --read-data >"$work/check.txt" || fail 'full repository verification failed; inspect credentials, keys and repository integrity privately'
+    measure
+    local_check 0
+    jq -n --argjson bytes "$usage" '{ok:true,repository_bytes:$bytes,repository_verification:"all stored data",hard_quota:false}'
+    ;;
+  restore)
+    snapshot=$3
+    destination=$4
+    [[ $snapshot =~ ^[a-f0-9]{64}$ ]] || fail 'restore requires an explicit full completed snapshot ID, never latest'
+    [[ $destination == /* && $(realpath -m -- "$destination") == "$destination" && $(dirname -- "$destination") == "$stage" && $(basename -- "$destination") =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$ && ! -e "$destination" && ! -L "$destination" ]] || fail 'restore destination must be a new named direct child of the private staging directory'
+    snapshots
+    jq -e --arg id "$snapshot" 'any(.[]; .id == $id and (.tags | index("completed")))' "$work/snapshots.json" >/dev/null || fail 'snapshot is not a completed recovery point for this application/environment'
+    rs ls --json "$snapshot" >"$work/tree.json" || fail 'snapshot tree inspection failed'
+    jq -se '[.[] | select(.struct_type == "node")] | length == 2 and all(.[]; .type == "file") and ([.[].path] | sort) == ["/database.sqlite3","/metadata.json"]' "$work/tree.json" >/dev/null || fail 'snapshot does not contain exactly the expected regular files'
+    rs stats --json --mode restore-size "$snapshot" >"$work/stats.json" || fail 'restore size is unknown'
+    restore_bytes=$(jq -er '.total_size' "$work/stats.json") || fail 'restore size is unknown'
+    number "$restore_bytes" || fail 'restore size is unknown'
+    local_check "$((2 * restore_bytes + 2 * usage))"
+    mkdir -- "$destination" || fail 'cannot create isolated restore directory; destination must not exist'
+    restore_created=$destination
+    rs restore "$snapshot" --target "$destination" --verify >"$work/restore.txt" || fail 'restic restore failed or interrupted; live database untouched'
+    [[ -f "$destination/database.sqlite3" && ! -L "$destination/database.sqlite3" && -f "$destination/metadata.json" && ! -L "$destination/metadata.json" ]] || fail 'restored payload is invalid'
+    jq -e --arg app "$app" --arg environment "$environment" '.format == 1 and .app == $app and .environment == $environment and (.release | test("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"))' "$destination/metadata.json" >/dev/null || fail 'restored identity metadata is invalid'
+    run dotnet "$APP_DLL" --validate-db "$destination/database.sqlite3" >"$work/validation.json" || fail 'restored SQLite validation failed; live database untouched'
+    validate_json "$work/validation.json" validate
+    standalone "$destination/database.sqlite3"
+    jq -e --slurpfile validation "$work/validation.json" '.validation == $validation[0]' "$destination/metadata.json" >/dev/null || fail 'restored SQLite hash or migration history differs from backup metadata'
+    local_check 0
+    measure
+    jq -n --arg snapshot "$snapshot" --slurpfile metadata "$destination/metadata.json" '{ok:true,snapshot_id:$snapshot,release:$metadata[0].release,validation:$metadata[0].validation,live_database_replaced:false}'
+    restore_created=''
+    ;;
+esac
