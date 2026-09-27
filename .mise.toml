@@ -4,7 +4,7 @@ min_version = "2026.7.13"
 # Explicit backend: dotnet-legacy is a machine-local plugin name, not a registry tool.
 "asdf:mise-plugins/mise-dotnet-core" = "10.0.400"
 gitleaks = "8.30.1"
-lefthook = "2.1.12"
+lefthook = "2.1.14"
 restic = "0.19.1"
 rclone = "1.75.1"
 jq = "1.8.2"

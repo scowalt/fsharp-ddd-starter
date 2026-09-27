@@ -10,18 +10,18 @@
       },
       "FSharp.Core": {
         "type": "Direct",
-        "requested": "[10.1.400, )",
-        "resolved": "10.1.400",
-        "contentHash": "mxCkXuBt4wyRMmHf4boZXm30zZZsjBt3+9ISzXB8wFvJJAACrPPh9vj85Kqtxj/2FvDxAQnnRnJpNcJSXElhgA=="
+        "requested": "[10.1.401, )",
+        "resolved": "10.1.401",
+        "contentHash": "IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ=="
       },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
-        "requested": "[18.9.0, )",
-        "resolved": "18.9.0",
-        "contentHash": "xIzVXa/VpKXqDWzyC/5Hw8JbFY5u9k3Jc53CpcjBiOXvkQGio484LD9FNwOiGUSMDcYL3Rcw9sNgGi5WrswlPQ==",
+        "requested": "[18.10.1, )",
+        "resolved": "18.10.1",
+        "contentHash": "SxCFvJE/2ltUQgCgv6+Ixagohw4sZc9hM7Wid2foaNM7paBscktoHLoRDz91fW8wbHG87Rg9Ku59/8PXumqUrA==",
         "dependencies": {
-          "Microsoft.CodeCoverage": "18.9.0",
-          "Microsoft.TestPlatform.TestHost": "18.9.0"
+          "Microsoft.CodeCoverage": "18.10.1",
+          "Microsoft.TestPlatform.TestHost": "18.10.1"
         }
       },
       "xunit": {
@@ -43,13 +43,13 @@
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
-        "resolved": "18.9.0",
-        "contentHash": "MtegCIKGuG0r/LCdIjoR1HgzCGIUBhR3aNdbtQpts5vMXQuqBDZ2Jsd2uFKoHFM2XrQV6ZrDf3F5oLi3SLTp8w=="
+        "resolved": "18.10.1",
+        "contentHash": "tV7tCyp/t+DuwQugLkCeUN7NBFFB4fEGRPr0gkMQ2nQgAvQQjmGlZZi1dsLzbyoe/A0mbnKybmkIh8qhT9p4Zw=="
       },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "hubA20AGenQ4Sx0ElWaPpB8DISjXpdx463+1zOGRslsT0e/t/06ITv+pHsop8CcJ0d8PZLfgnT7juCDVD79Dkw==",
+        "resolved": "10.0.12",
+        "contentHash": "2aL9eL5HQr0V4b8V909SD+jQAx6qnTTl7sT/v3D8dIvmr2UGdpZIQxqm1pj2Js3e4EYTvpw0oMH7DjapJJuPPw==",
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.12"
         }
@@ -79,15 +79,15 @@
       },
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
-        "resolved": "18.9.0",
-        "contentHash": "Fz/qXC52VXXopzHj7v2reCKcCqSxkTDCkEDfkNAH0vni/7qK/KLMiEYtRmnUanxO2F2g2zZZ60qCpxF0AF7URA=="
+        "resolved": "18.10.1",
+        "contentHash": "o+PuLDRVp1iwiVAPBADZItXgm9Ck23XtPhE4kZtZVi0uYnMiiz1Dx9Cjh75kJ+ijfqnORL3VOTOaQVKi0f/ixg=="
       },
       "Microsoft.TestPlatform.TestHost": {
         "type": "Transitive",
-        "resolved": "18.9.0",
-        "contentHash": "Oq+Pma/J86aZL72t71bcESvDszDsTjUfl6PIsuDdPoKTHZfNMhKamCfLD5fKx51W/u0KozXtJo2/3fnt0sgPxg==",
+        "resolved": "18.10.1",
+        "contentHash": "KYz2omqkoz9E2mWa4fdgT+Ycie1wi5968EmyJlusjlp87RxxtA2FvDm8tcBEYIDzLnkWGnsKjE4d13Z7/rxkQA==",
         "dependencies": {
-          "Microsoft.TestPlatform.ObjectModel": "18.9.0"
+          "Microsoft.TestPlatform.ObjectModel": "18.10.1"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
@@ -163,7 +163,7 @@
       "starterkit.web": {
         "type": "Project",
         "dependencies": {
-          "FSharp.Core": "[10.1.400, )",
+          "FSharp.Core": "[10.1.401, )",
           "Oxpecker": "[2.1.1, )",
           "Oxpecker.ViewEngine": "[2.1.0, )",
           "StarFederation.Datastar.FSharp": "[1.4.0, )",
@@ -183,7 +183,7 @@
       "starterkit.worktracking.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "[10.0.11, )",
+          "Microsoft.Data.Sqlite": "[10.0.12, )",
           "SQLitePCLRaw.core": "[2.1.13, )",
           "StarterKit.WorkTracking.Application": "[1.0.0, )",
           "StarterKit.WorkTracking.Domain": "[1.0.0, )",
@@ -212,11 +212,11 @@
       },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
-        "requested": "[10.0.11, )",
-        "resolved": "10.0.11",
-        "contentHash": "7je7UELzm131GiLYc4PpZvfKXIgIyzPM+v+tjcd/nbnuWRfgcONYKzDTqJlURxwVCFsVnlpmq6y6yn4qvR8QXQ==",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "xUq9xUc653ue7ac2rMfCaf8UQN+U3zS8poWYlugycpvJllplMM0Mk7v/+MM0CTlu9zGvbGML4BPH8YWhrUOfGw==",
         "dependencies": {
-          "Microsoft.Data.Sqlite.Core": "10.0.11",
+          "Microsoft.Data.Sqlite.Core": "10.0.12",
           "SQLitePCLRaw.bundle_e_sqlite3": "2.1.12",
           "SQLitePCLRaw.core": "2.1.12"
         }
