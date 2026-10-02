@@ -31,8 +31,8 @@ Add a context only after the language or rules require an independent model:
 
 1. Establish its language and scenarios.
 2. Add context-first Domain/Application/Infrastructure projects only for responsibilities it actually needs.
-3. Create `CONTEXT-MAP.md` at the repository root.
-4. Give each context its own `CONTEXT.md` and record responsibility, upstream/downstream relationships, contract ownership, translation, and communication mode in the map.
+3. Create `GLOSSARY-MAP.md` at the repository root.
+4. Give each context its own `GLOSSARY.md` and record responsibility, upstream/downstream relationships, contract ownership, translation, and communication mode in the map.
 5. Translate across context contracts. Do not share mutable entities or add a generic `SharedKernel`.
 
 A bounded-context boundary does not require a process or microservice boundary. Keep contexts in the modular monolith unless an operational requirement justifies extraction.

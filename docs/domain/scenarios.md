@@ -1,6 +1,6 @@
 # WorkTracking domain scenarios
 
-These examples use the ubiquitous language in `CONTEXT.md`. They are the source material for domain and application tests.
+These examples use the ubiquitous language in `GLOSSARY.md`. They are the source material for domain and application tests.
 
 ## Create an open work item
 
