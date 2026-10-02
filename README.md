@@ -28,7 +28,7 @@ The initializer refuses missing, malformed, equal, or non-PascalCase names. It r
 
 Read these before changing business behavior:
 
-- `CONTEXT.md` — ubiquitous-language glossary only;
+- [GLOSSARY.md](GLOSSARY.md) — ubiquitous-language glossary only;
 - `docs/domain/scenarios.md` — examples, edge cases, and invariants;
 - `AGENTS.md` — domain-first contributor workflow;
 - `docs/architecture.md` — dependency rules and composition root.
@@ -43,6 +43,17 @@ mise run validate
 The local pre-commit path runs Fantomas and Gitleaks. CI runs formatting, asset integrity, locked restore, build, .NET and local backup tests, architecture checks, OpenTofu example validation, and Trivy.
 
 `mise install` supplies the pinned restic, rclone, jq, and OpenTofu tools used by the backup helper and validation suite. Local tests do not access R2.
+
+## Migrate existing domain documents
+
+For repositories using the previous convention, rename existing documents with `git mv`:
+
+```bash
+git mv CONTEXT.md GLOSSARY.md
+git mv CONTEXT-MAP.md GLOSSARY-MAP.md
+```
+
+Run only the commands for files that exist, and apply the same rename to nested context glossaries and templates. Update references to the new filenames; skills now look only for `GLOSSARY.md` and `GLOSSARY-MAP.md`.
 
 ## Run the sample
 

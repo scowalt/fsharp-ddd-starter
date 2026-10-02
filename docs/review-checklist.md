@@ -2,7 +2,7 @@
 
 - Which bounded context owns this change?
 - Which concrete business scenario or invariant changed?
-- Does the code use the ubiquitous language in `CONTEXT.md`?
+- Does the code use the ubiquitous language in `GLOSSARY.md`?
 - Did any HTTP, serialization, database, messaging, or framework type leak into Domain?
 - Are external time, identifiers, randomness, and facts explicit inputs?
 - Is a new abstraction solving a current problem?

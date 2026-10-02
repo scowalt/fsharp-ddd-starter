@@ -4,14 +4,14 @@ This repository uses Domain-Driven Design as a development discipline. Do not tr
 
 ## Required workflow
 
-1. Read the relevant `CONTEXT.md` before changing domain code.
+1. Read the relevant `GLOSSARY.md` before changing domain code.
 2. Describe concrete scenarios and edge cases before selecting tactical patterns.
 3. Challenge ambiguous terms instead of silently introducing synonyms.
 4. Update the glossary as soon as terminology is resolved. Keep it free of implementation details.
 5. Write or update domain tests before implementing a changed business rule.
 6. Implement the pure domain transition before adapters and endpoints.
 7. Re-check context ownership, dependency direction, and explicit boundary mappings.
-8. Update `CONTEXT-MAP.md` only when relationships between two or more real bounded contexts change. Do not create it preemptively.
+8. Update `GLOSSARY-MAP.md` only when relationships between two or more real bounded contexts change. Do not create it preemptively.
 9. Create an ADR only when the decision is costly to reverse, surprising without context, and based on a genuine trade-off.
 10. Run `./scripts/validate.sh` before signoff.
 

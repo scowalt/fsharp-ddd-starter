@@ -2,7 +2,7 @@
 
 - [ ] I identified the bounded context that owns this change.
 - [ ] I named the business scenario or invariant that changed.
-- [ ] The code uses the ubiquitous language from `CONTEXT.md`.
+- [ ] The code uses the ubiquitous language from `GLOSSARY.md`.
 - [ ] No transport or persistence type leaked into Domain.
 - [ ] Every new abstraction solves a current problem.
 - [ ] Domain and architecture tests prove the intended boundary.
