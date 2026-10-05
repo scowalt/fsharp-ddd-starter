@@ -1,4 +1,3 @@
-# No defaults and no extension fields. Budgets are exact JSON integers <= 1 PiB.
 def positive: type == "number" and . == floor and . > 0 and . <= 1125899906842624;
 def identity: type == "string" and test("^[a-z0-9][a-z0-9-]{0,62}$");
 def path: type == "string" and startswith("/") and (test("[\\x00-\\x1f\\x7f]") | not);

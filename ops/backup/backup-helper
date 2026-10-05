@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Linux only. Service control and repository initialization belong to the operator.
 set +x
 set -Eeuo pipefail
 umask 077
-# Only fixed helper errors reach stderr; never forward tool output or paths.
 exec 3>&2 2>/dev/null
 export LC_ALL=C
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -65,8 +63,6 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'fail "helper interrupted; deployment must stop"' INT TERM HUP
-# Strip tool configuration, proxy overrides, password commands and application
-# settings. Secrets are exported in-shell, never put in process arguments.
 run() (
   for name in $(compgen -e); do export -n "${name?}"; done
   export PATH LC_ALL
@@ -90,8 +86,6 @@ rc() { run rclone --config /dev/null --retries 1 --low-level-retries 1 --contime
 [[ $(jq --version) == jq-1.8.2 ]] || fail 'required jq version: 1.8.2'
 rs cat config >"$work/repository.json" || fail 'repository access failed; check credentials, keys, connectivity and locks; never auto-initialize'
 jq -e --arg id "$repo_id" '.id == $id and (.version == 1 or .version == 2)' "$work/repository.json" >/dev/null || fail 'repository identity mismatch'
-# Fixed 64 MiB metadata/pack allowance, plus double observed repository size for
-# maintenance overlap. These estimates are safeguards, NOT hard storage quotas.
 reserve=67108864
 number() { [[ "$1" =~ ^(0|[1-9][0-9]{0,15})$ && "$1" -le 1125899906842624 ]]; }
 local_check() {
@@ -134,14 +128,10 @@ validate_json() {
   ' "$1" >/dev/null || fail 'SQLite operation returned invalid integrity metadata'
 }
 standalone() {
-  # The .NET process has closed this private database. WAL-mode reads can leave
-  # empty sidecars; never ignore a nonempty WAL/journal or copy the live source.
   [[ ! -s "$1-wal" && ! -s "$1-journal" ]] || fail 'isolated SQLite file has uncheckpointed data; refusing main-file-only backup or restore'
   rm -f -- "$1-wal" "$1-shm" "$1-journal"
 }
 prune() {
-  # Separate command even if forget removed nothing: collect orphan packs left by
-  # interrupted uploads. No automatic unlock; restic owns repository safety.
   rs prune --max-unused 0 --max-repack-size 0 >"$work/prune.txt" || fail 'repository prune failed; recovery points remain referenced; deployment must stop'
 }
 local_check 0
@@ -169,7 +159,6 @@ case "$operation" in
     previous_completed=$(jq '[.[] | select(.tags | index("completed"))] | length' "$work/snapshots.json")
     expected_completed=$(( previous_completed >= 1 ? 2 : 1 ))
     rs check >"$work/check.txt" || fail 'repository structure check failed; deployment must stop'
-    # A crash or exit 3 can leave a pending snapshot. It is never a recovery point.
     mapfile -t pending < <(jq -r '.[] | select(.tags | index("pending")) | .id' "$work/snapshots.json")
     if (( ${#pending[@]} )); then
       rs forget "${pending[@]}" >"$work/forget.txt" || fail 'failed-snapshot cleanup failed; deployment must stop'
@@ -197,7 +186,6 @@ case "$operation" in
     (( 2 * usage + reserve <= remote_budget )) || fail 'insufficient repository headroom before retention'
     rs tag --remove pending --add completed "$snapshot" >"$work/tag.txt" || fail 'snapshot promotion failed; deployment must stop'
     snapshots
-    # tag rewrites the snapshot ID; original is recorded by restic, not a custom catalogue.
     snapshot=$(jq -er --arg original "$snapshot" '[.[] | select((.id == $original or .original == $original) and (.tags | index("completed")))] | select(length == 1) | .[0].id' "$work/snapshots.json") || fail 'promoted snapshot identifier is ambiguous'
     rs forget --tag "backup-helper-v1,app:$app,environment:$environment,completed" --group-by '' --keep-last 2 >"$work/forget.txt" || fail 'retention failed; deployment must stop'
     prune

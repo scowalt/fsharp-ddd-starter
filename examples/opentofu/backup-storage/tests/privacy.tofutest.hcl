@@ -1,4 +1,3 @@
-# This provider is fully mocked. These tests never access Cloudflare.
 mock_provider "cloudflare" {}
 
 variables {

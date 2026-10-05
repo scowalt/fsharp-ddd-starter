@@ -1,8 +1,10 @@
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     format:
-      glob: "*.{fs,fsx}"
+      glob: '*.{fs,fsx}'
       run: dotnet fantomas --check {staged_files}
     gitleaks:
       run: mise exec -- gitleaks git --pre-commit --staged --redact
+    no-comments:
+      run: uv run --no-project --python 3.14 --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py --staged

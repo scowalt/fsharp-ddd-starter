@@ -23,7 +23,6 @@ module private GenerationFixture =
 
         start.Environment.Remove("GIT_DIR") |> ignore
         start.Environment.Remove("GIT_WORK_TREE") |> ignore
-        // Child build nodes must not outlive a disposable fixture or retain its output pipes.
         start.Environment["MSBUILDDISABLENODEREUSE"] <- "1"
         start.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] <- "0"
         use child = Process.Start start
@@ -64,8 +63,7 @@ type GenerationTests() =
     [<Fact>]
     member _.``generation fixes logical context identity once and assembly namespace refactors do not reapply SQL``() =
         let root = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../.."))
-        // The initializer intentionally removes itself in generated applications.
-        // This template-maintainer test runs only where that public command exists.
+
         if File.Exists(Path.Combine(root, "scripts", "init.sh")) then
             let fixture =
                 Path.Combine(Path.GetTempPath(), $"migration-generation-{Guid.NewGuid():N}")
@@ -124,7 +122,7 @@ type GenerationTests() =
 
                 for file in Directory.EnumerateFiles(sourceRoot, "*.fsproj", SearchOption.AllDirectories) do
                     let projectXml = XDocument.Load file
-                    // New assembly names and namespaces, with explicit LogicalName untouched.
+
                     projectXml.Root.AddFirst(
                         XElement(
                             XName.Get "PropertyGroup",

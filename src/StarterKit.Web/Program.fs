@@ -70,7 +70,7 @@ module Program =
 
         let settings =
             SqliteConnectionStringBuilder(DataSource = dataFile, ForeignKeys = Nullable true)
-        // Ordinary production opens cannot recreate a file removed after preflight.
+
         settings.Mode <-
             if development || (not exists && allowCreate) then
                 SqliteOpenMode.ReadWriteCreate
@@ -127,7 +127,6 @@ module Program =
 
     [<EntryPoint>]
     let main args =
-        // Dispatch before CreateBuilder: operations cannot bind listeners or run migrations.
         match args with
         | [| "--snapshot-db"; source; destination |] ->
             SqliteDatabaseOperations.snapshot source destination

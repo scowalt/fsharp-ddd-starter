@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# REAL SQLite + encrypted restic integration. No database/process doubles here.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 helper="$here/../backup-helper"
@@ -39,7 +38,6 @@ export RESTIC_PASSWORD='local-integration-test-password-not-a-real-secret'
 restic -r "$tmp/repo" init >/dev/null
 repo_id=$(restic -r "$tmp/repo" cat config | jq -r .id)
 jq -n --arg root "$tmp" --arg id "$repo_id" '{app:"roundtrip",environment:"local",database:($root+"/live.db"),staging_directory:($root+"/stage"),state_directory:($root+"/state"),repository:{type:"local",path:($root+"/repo")},repository_id:$id,remote_budget_bytes:1073741824,local_budget_bytes:1073741824,lock_wait_seconds:1,operation_timeout_seconds:60}' >"$tmp/config.json"
-# Keep the WAL connection open: raw main-file copies would miss the saved item.
 sha256sum "$tmp/live.db" "$tmp/live.db-wal" >"$tmp/source-before"
 "$helper" backup "$tmp/config.json" release-real-wal >"$tmp/backup.json"
 sha256sum -c "$tmp/source-before" >/dev/null || fail 'backup changed the live database/WAL'
@@ -50,8 +48,6 @@ wait "$fixture_pid"
 fixture_pid=''
 echo 'PASS: real non-serving DLL captured a standalone SQLite snapshot including live WAL data'
 
-# Replacement-machine drill: a repository copy, injected password and application
-# artifact suffice. Remove the original repository and all original helper state.
 cp -a "$tmp/repo" "$tmp/replacement-repo"
 rm -rf "$tmp/repo" "$tmp/stage" "$tmp/state"
 mkdir -m 700 "$tmp/replacement-stage" "$tmp/replacement-state"

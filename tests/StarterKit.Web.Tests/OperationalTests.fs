@@ -40,7 +40,7 @@ module OperationalFixture =
 
         for arg in args do
             start.ArgumentList.Add arg
-        // If an operational command accidentally reaches hosting, fail instead of listening.
+
         start.Environment["ASPNETCORE_URLS"] <- "invalid://must-not-start"
         use child = Process.Start start
         let stdout = child.StandardOutput.ReadToEndAsync()
@@ -93,7 +93,6 @@ type OperationalTests() =
         Assert.Equal(0, json.RootElement.GetProperty("migrationHistory").GetArrayLength())
         Assert.Equal(64, json.RootElement.GetProperty("sha256").GetString().Length)
         Assert.DoesNotContain("committed WAL data", stdout)
-        // A recovery snapshot is a standalone rollback-journal database, not a WAL database.
         let header = File.ReadAllBytes destination
         Assert.Equal(1uy, header[18])
         Assert.Equal(1uy, header[19])
@@ -234,8 +233,6 @@ type OperationalTests() =
         let source = fixture.File "source.db"
         let destination = fixture.File "snapshot.db"
         execute source "CREATE TABLE sample(value TEXT);" |> ignore
-        // On the old path the journal directory makes SQLite fail after creating the
-        // destination, then cleanup deletes the unrelated WAL and SHM files.
         Directory.CreateDirectory(destination + "-journal") |> ignore
         File.WriteAllText(destination + "-wal", "existing WAL")
         File.WriteAllText(destination + "-shm", "existing SHM")
@@ -278,8 +275,6 @@ type OperationalTests() =
         command.ExecuteNonQuery() |> ignore
 
         let inspect (child: Process) =
-            // An actual SQLite lock pauses capture after its initial path check. Observe
-            // owned staging, then inject filesystem changes through the public CLI seam.
             let timer = Stopwatch.StartNew()
 
             while not child.HasExited

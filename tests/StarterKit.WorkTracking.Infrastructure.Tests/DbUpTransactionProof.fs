@@ -7,11 +7,6 @@ open DbUp.Engine
 open Microsoft.Data.Sqlite
 open Xunit
 
-// Dependency characterization, deliberately using the vendor's public interface.
-// DbUp 6.0.15 UpgradeEngine.cs:62-102 catches AFTER SingleTransactionStrategy.Dispose.
-// ScriptExecutor.cs:129 preprocesses OUTSIDE ExecuteCommandsWithManagedConnection.
-// https://github.com/DbUp/DbUp/blob/52450a1cf90f9c584b32c67f664e03b88593bb74/src/dbup-core/Engine/Transactions/SingleTransactionStrategy.cs
-// Keep this reproducer when upgrading the dependency; the application's safer path is tested separately.
 type DbUpTransactionProof() =
     [<Fact>]
     member _.``vendor whole-run transaction commits earlier work when later preprocessing throws``() =

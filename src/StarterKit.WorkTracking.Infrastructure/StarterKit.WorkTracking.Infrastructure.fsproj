@@ -5,7 +5,6 @@
     <Compile Include="SqliteWorkItemStore.fs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Generated once. Do not change this logical context identity after deployment. -->
     <EmbeddedResource Include="Migrations/*.sql" LogicalName="migration.worktracking.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
