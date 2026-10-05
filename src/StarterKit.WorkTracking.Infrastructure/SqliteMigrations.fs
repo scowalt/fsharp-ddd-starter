@@ -15,8 +15,6 @@ open Microsoft.Data.Sqlite
 
 type MigrationScript = { Id: string; Bytes: byte array }
 
-/// Embedded logical names are migration.<fixed-context>.<number>_<description>.sql.
-/// Scripts is the explicit release-catalogue seam for tooling and disposable failure fixtures.
 type MigrationSource =
     | Embedded of Assembly
     | Scripts of MigrationScript seq
@@ -66,9 +64,6 @@ module private MigrationJournal =
                     .Invoke()
                     .ExecuteCommandsWithManagedConnection(fun factory ->
                         guard failure (fun () ->
-                            // DbUp begins Microsoft's non-deferred write transaction before this callback.
-                            // Never read history using a separate connection or before acquiring that lock.
-                            // TEMP objects must never shadow the persistent journal or its schema.
                             let version = scalar factory "PRAGMA main.user_version;" :?> int64
 
                             let journalExists =
@@ -178,8 +173,6 @@ module private MigrationJournal =
                 parameter command "$at" (DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
                 command.ExecuteNonQuery() |> ignore
 
-// Supported provider overrides, not a migration engine. Microsoft.Data.Sqlite accepts
-// the complete SQL text. DbUp's regex splitter would even split inside string literals.
 type private ExactSqliteConnectionManager(shared) =
     inherit DbUp.Sqlite.SqliteConnectionManager(shared: DbUp.Sqlite.Helpers.SharedConnection)
     override _.SplitScriptIntoCommands contents = [| contents |]
@@ -194,7 +187,7 @@ type private ExactSqliteExecutor(configuration: DbUp.Builder.UpgradeConfiguratio
             Seq.empty,
             (fun () -> configuration.Journal)
         )
-    // Also removes the implicit StripSchemaPreprocessor; disabling variables alone does NOT.
+
     override _.PreprocessScriptContents(script, _) = script.Contents
 
 [<RequireQualifiedAccess>]
@@ -265,8 +258,6 @@ module SqliteMigrations =
         with _ ->
             raise (MigrationRejected InvalidCatalogue)
 
-    /// Applies a complete immutable catalogue, including history validation on a no-op run.
-    /// Owns a bounded two-second SQLite write-lock wait. No SQL/data/connection details are returned on failure.
     let run connectionString source : Result<MigrationReport, MigrationError> =
         try
             let catalogue = prepare source
@@ -292,13 +283,10 @@ module SqliteMigrations =
                 configuration.ConnectionManager.TransactionMode <- TransactionMode.SingleTransaction
                 configuration.ScriptPreprocessors.Clear()
                 let executor = ExactSqliteExecutor(configuration)
-                // Catch all executor failures inside DbUp's transaction strategy, including
-                // any future preprocessing/splitting failure. See DbUpTransactionProof.fs.
+
                 let execute script variables =
                     configuration.ConnectionManager.ExecuteCommandsWithManagedConnection(fun _ ->
                         MigrationJournal.guard managedFailure (fun () ->
-                            // Use SQLite's parser, not a home-grown SQL parser, to prohibit commands
-                            // that could commit the batch or affect databases outside its transaction.
                             let authorize =
                                 SQLitePCL.strdelegate_authorizer (fun _ operation _ _ _ _ ->
                                     if
@@ -327,8 +315,7 @@ module SqliteMigrations =
                                     null
                                 )
                                 |> ignore
-                            // Handwritten SQL can alter the journal. Revalidate the COMPLETE
-                            // expected catalogue after the last journal write, before DbUp commits.
+
                             if script.Name = catalogue[catalogue.Length - 1].Script.Name then
                                 let recorded = configuration.Journal.GetExecutedScripts()
 

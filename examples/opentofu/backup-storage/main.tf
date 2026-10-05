@@ -9,7 +9,6 @@ terraform {
   }
 }
 
-# Infrastructure credentials come from CLOUDFLARE_API_TOKEN, not this file.
 provider "cloudflare" {}
 
 resource "cloudflare_r2_bucket" "backups" {
@@ -44,5 +43,4 @@ resource "cloudflare_r2_bucket_lifecycle" "backups" {
     }
   }]
 
-  # Never age-expire restic objects: recent snapshots can reference old packs.
 }

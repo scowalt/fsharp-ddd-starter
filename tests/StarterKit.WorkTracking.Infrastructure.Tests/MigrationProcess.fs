@@ -2,8 +2,6 @@ namespace StarterKit.WorkTracking.Infrastructure.Tests
 
 open StarterKit.WorkTracking.Infrastructure
 
-// A test-only executable exercising the SAME public migration operation in a killable
-// process. No test callbacks or interruption switches enter the production executable.
 module MigrationProcess =
     [<EntryPoint>]
     let main args =

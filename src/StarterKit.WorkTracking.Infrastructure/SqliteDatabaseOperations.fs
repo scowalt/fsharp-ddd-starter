@@ -29,14 +29,12 @@ type DatabaseOperationError =
 
 exception private DatabaseOperationRejected of DatabaseOperationError
 
-/// Non-serving operations. Neither function loads a migration catalogue or initializes a schema.
 [<RequireQualifiedAccess>]
 module SqliteDatabaseOperations =
     let private openReadOnly path =
         if not (File.Exists path) then
             raise (DatabaseOperationRejected MissingDatabase)
-        // SQLite treats a zero-byte file as a new database, even in read-only mode.
-        // These commands validate existing database files, never initialization placeholders.
+
         do
             use file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
             let header = Array.zeroCreate<byte> 16
@@ -101,8 +99,7 @@ module SqliteDatabaseOperations =
                     { Id = reader.GetString(1)
                       Sha256 = reader.GetString(2)
                       AppliedAt = reader.GetString(3) }
-                // Only bounded migration metadata may reach stdout. A malformed journal
-                // must not turn application data or arbitrary stored text into a log line.
+
                 if
                     reader.GetValue(0) <> box (int64 (history.Count + 1))
                     || not (Regex.IsMatch(entry.Id, "\\A[a-z][a-z0-9]*/[0-9]{3}_[a-z][a-z0-9_]*\\.sql\\z"))
@@ -158,8 +155,6 @@ module SqliteDatabaseOperations =
         for suffix in [ ""; "-journal"; "-wal"; "-shm" ] do
             let exists =
                 try
-                    // GetAttributes observes the link itself, including dangling symlinks.
-                    // Only absence is accepted; access and other I/O errors fail closed.
                     File.GetAttributes(destination + suffix) |> ignore
                     true
                 with
@@ -169,8 +164,6 @@ module SqliteDatabaseOperations =
             if exists then
                 raise (DatabaseOperationRejected DestinationExists)
 
-    // Directory.CreateDirectory accepts existing directories. mkdir instead gives us
-    // exclusive ownership, including in the unlikely event of a random-name collision.
     module private NativeDirectory =
         [<DllImport("libc", EntryPoint = "mkdir", CharSet = CharSet.Ansi)>]
         extern int create(string path, uint32 mode)
@@ -219,7 +212,6 @@ module SqliteDatabaseOperations =
                     use target = new SqliteConnection(settings.ConnectionString)
                     target.Open()
                     connection.BackupDatabase target
-                    // Normalize ONLY our private snapshot, never the read-only source.
                     use standalone = target.CreateCommand()
                     standalone.CommandText <- "PRAGMA journal_mode=DELETE;"
 
@@ -228,15 +220,11 @@ module SqliteDatabaseOperations =
 
                 match validate stagedFile with
                 | Ok report ->
-                    // Capture may take time. Refuse entries that appeared since preflight,
-                    // and retain no-overwrite promotion even after this second check.
                     requireAbsentDestination destination
                     File.Move(stagedFile, destination, false)
                     Ok report
                 | Error error -> raise (DatabaseOperationRejected error)
             finally
-                // Every path SQLite could have created is inside this exclusively owned
-                // directory. Never delete destination companions belonging to another call.
                 Directory.Delete(staging, true)
         with
         | DatabaseOperationRejected error -> Error error

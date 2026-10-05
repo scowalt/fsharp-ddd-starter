@@ -360,8 +360,6 @@ type MigrationTests() =
                 "CREATE TABLE parent(id INTEGER PRIMARY KEY); CREATE TABLE child(parent_id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED); INSERT INTO child VALUES (99);\n"
 
         Assert.Equal(Error TransactionOutcomeUncertain, run db [ first; next ])
-        // Closing our owned connection recovers this specific deferred-FK failure.
-        // The interface remains conservative for other commit/disposal failures.
         Assert.Equal(0L, db.Query("SELECT COUNT(*) FROM sqlite_schema WHERE name IN ('parent', 'child');") :?> int64)
         Assert.Equal(1L, db.Query("SELECT COUNT(*) FROM __migration_history;") :?> int64)
         Assert.Equal("preserved", db.Query("SELECT value FROM sample;") :?> string)
@@ -397,8 +395,6 @@ type MigrationTests() =
         use child = Process.Start start
 
         try
-            // The second script spills an 8MB blob, after the first script and journal row.
-            // This observes pending disk effects without opening another write connection.
             let timer = Stopwatch.StartNew()
 
             while not child.HasExited

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# OFFLINE process-contract tests only. Both storage tools are intercepted. No S3 API.
 # shellcheck disable=SC2016
 set -euo pipefail
 helper=$(realpath "$(dirname "$0")/../backup-helper")
