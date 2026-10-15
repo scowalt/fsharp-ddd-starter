@@ -44,6 +44,18 @@ steps:
       - mise install asdf:mise-plugins/mise-dotnet-core restic rclone jq opentofu
       - eval "$(mise env --shell bash)"
       - export DOTNET_ROOT="$(mise where asdf:mise-plugins/mise-dotnet-core@10.0.400)"
+      - |
+        umask 077
+        export _FSharpCoreLibraryPacksFolder="$(mktemp -d)"
+        archive="$(mktemp)"
+        curl --fail --show-error --silent --location --proto '=https' --tlsv1.2 https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.400/dotnet-sdk-10.0.400-linux-x64.tar.gz --output "$archive"
+        printf '%s  %s\n' 1033977dd837150e0814cf0c5d5b17ceb63925fda7ba2158b47258a4bd7c048cf82eac3bc1166f3146f53124a3f5fba09db1de1260d2ce96399860303b404b48 "$archive" | sha512sum --check -
+        member=./sdk/10.0.400/FSharp/library-packs/FSharp.Core.10.1.400.nupkg
+        test "$(tar -tzf "$archive" "$member")" = "$member"
+        test "$(tar -tvzf "$archive" "$member" | cut -c 1)" = -
+        tar -xOf "$archive" "$member" > "$_FSharpCoreLibraryPacksFolder/FSharp.Core.10.1.400.nupkg"
+        printf '%s  %s\n' 407fee3d5695e44c7905d92cd82681685457c78f7f1af2ab810ee279c4110910 "$_FSharpCoreLibraryPacksFolder/FSharp.Core.10.1.400.nupkg" | sha256sum --check -
+        rm -- "$archive"
       - ./scripts/validate.sh
   - name: trivy
     image: docker.io/aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e
