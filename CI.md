@@ -44,6 +44,16 @@ locks, package pins, migration bytes/identities, and vendored asset hashes remai
 unchanged. Gitleaks 8.30.1 and Lefthook 2.1.12 remain local-hook tools, not new
 hosted gates.
 
+The same-version FSharp.Core packages bundled by different SDK architectures and
+published on NuGet have different identities. To preserve the committed lock hash,
+the job verifies Microsoft's exact SDK 10.0.400 x64 archive as **data**, extracts
+only its verified FSharp.Core 10.1.400 NUPKG into a fresh private package-only feed,
+and selects it via `_FSharpCoreLibraryPacksFolder`. All 28 packaged DLLs were
+statically verified as IL-only AnyCPU with no RID/native assets. No x64 runtime or
+SDK is installed/executed, no SDK file is replaced, and locked restore, reference
+versions and graph remain unchanged. Native ARM64 execution is still required to
+prove loading and behavior; static inspection and local x64 success alone do not.
+
 The unchanged validation script restores tools, checks formatting/assets and
 architecture restrictions, performs locked solution restore and Release build,
 runs all five .NET test projects, runs real **local disposable** encrypted-restic
