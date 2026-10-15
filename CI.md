@@ -86,7 +86,11 @@ the original checkout defaults. The policy checker enumerates the entire Git
 checkout/index, never only changed paths. The locally produced merge commit need
 not equal GitHub's generated event merge SHA: record the captured head, fetched
 base, resulting tree and parents, and associate native feedback with the actual
-PR head. Local synthetic clone tests do not prove a hosted PR execution.
+PR head. Each workflow logs the captured head, fetched `origin` refs, and actual
+HEAD commit, parents and tree before checks (after Git installation in Validate).
+These are read-only diagnostics, not a new gate or a GitHub event-merge-SHA
+requirement; they print no remote URLs or configuration. Local synthetic clone
+tests do not prove a hosted PR execution.
 
 ## Parent-owned delivery
 

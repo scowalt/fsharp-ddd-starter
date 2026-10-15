@@ -29,6 +29,10 @@ steps:
       - apt-get update
       - apt-get install --no-install-recommends -y bash ca-certificates coreutils curl git libicu-dev libkrb5-3 libssl-dev ripgrep unzip util-linux xz-utils zlib1g
       - |
+        printf 'captured_head=%s\n' "$${CI_COMMIT_SHA}"
+        git for-each-ref --format='fetched_target=%(refname) %(objectname)' refs/remotes/origin
+        git show --no-patch --format='tested_commit=%H%ntested_parents=%P%ntested_tree=%T' HEAD
+      - |
         case "$(uname -m)" in
           aarch64) asset=linux-arm64; checksum=d8fa3d3fa2a21979c54c548967325a9db72f2a157996e8c536f62947b25592b7 ;;
           x86_64) asset=linux-x64; checksum=981bd9179cc089114a87b491fce2c4007ab05b5445dee7ad08e87e5dffcc154d ;;
