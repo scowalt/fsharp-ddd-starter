@@ -1,6 +1,9 @@
 when:
   - event: [push, tag, pull_request]
 
+labels:
+  ci_os: linux
+
 clone:
   - name: git
     image: docker.io/woodpeckerci/plugin-git:2.10.1@sha256:550075c844fcec0af41d9d28f9860aa5d8c43e1e9419be4b9266dc02c2f29804
