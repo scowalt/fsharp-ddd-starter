@@ -1,5 +1,18 @@
 # CI
 
+## Current public-source policy
+
+The owner selected public source with GitHub Actions on 2026-10-31. Use the retained
+`.github/workflows/validate.yml` and `no-comments.yml` without weakening their full
+validation, local-backup, mocked-infrastructure, Trivy or policy checks. They do
+not deploy applications or access live R2 data. Generated applications retain
+independent repository visibility and deployment decisions.
+
+Keep the former Woodpecker webhook disabled for this public repository so public
+pull requests cannot reach private runners. The definitions remain as historical
+reference. **Everything below records the superseded private-CI migration; it is
+not authorization to disable Actions or reprovision Woodpecker.**
+
 ## Contracts
 
 Woodpecker loads both files in `.woodpecker/`. They are independent workflows;
