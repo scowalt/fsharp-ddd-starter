@@ -35,7 +35,7 @@ or watchdog. Neither original workflow requests cancel-in-progress.
 
 ## Runtime and commands
 
-Images are pinned multi-platform manifests containing Linux ARM64 and AMD64. The policy
+Images are pinned by digest and include a `linux/amd64` manifest. The policy
 image supplies uv 0.11.32 and Python 3.14; its five parser requirements remain
 unchanged. Both original `uv run --no-project --python 3.14
 --with-requirements .comment-policy/requirements.txt` commands are preserved in
@@ -65,10 +65,9 @@ and selects it via `_FSharpCoreLibraryPacksFolder`. All 28 packaged DLLs were
 statically verified as IL-only AnyCPU with no RID/native assets. No x64 runtime or
 SDK is installed/executed, no SDK file is replaced, and locked restore, reference
 versions and graph remain unchanged. Independent acceptance on 2026-10-15 observed
-ARM64 PR11 pipeline 3 and main pipeline 5, each with all 107 .NET tests, 26 local
+PR11 pipeline 3 and main pipeline 5, each with all 107 .NET tests, 26 local
 backup PASS records, three mocked Tofu tests and 13 policy regressions passing.
-These dated results are not AMD64 acceptance. Static inspection and local x64
-success alone do not establish hosted execution.
+Static inspection and local x64 success alone do not establish hosted execution.
 
 The unchanged validation script restores tools, checks formatting/assets and
 architecture restrictions, performs locked solution restore and Release build,
@@ -120,19 +119,16 @@ tests do not prove a hosted PR execution.
 
 ## Architecture migration
 
-The workflows already select native x64/ARM64 mise binaries and native SDK/tools;
-no bootstrap, package or lock change is needed for AMD64. The canonical
-FSharp.Core dependency-data feed remains identical on both architectures. Preserve
-its exact archive/package hashes and locked identity rather than substituting the
-ARM SDK's differently hashed package.
+The only Woodpecker agent is the x86-64 CX43 host `woodpecker` (`linux/amd64`).
+The workflows select native mise binaries and native SDK/tools. Preserve the
+canonical FSharp.Core feed's exact archive/package hashes and locked identity
+rather than substituting another SDK architecture's differently hashed package.
 
-Both workflows select `labels: {ci_os: linux}`. The parent must first deploy the
-reviewed `WOODPECKER_AGENT_LABELS: ci_os=linux` setting to the existing Linux ARM64
-agent and verify its real OS/CPU and advertised custom label. Do not merge these
-label-dependent workflows before that readback: otherwise valid jobs would queue
-without an eligible agent. The native AMD64 replacement must advertise the same
-label while retaining its real `linux/amd64` platform; the old platform remains
-`linux/arm64`. Keep unsupported OS/CPU hosts out of this Linux CI pool.
+Both workflows select `labels: {ci_os: linux}`. The agent must advertise the
+reviewed `WOODPECKER_AGENT_LABELS: ci_os=linux` setting with its real
+`linux/amd64` platform; read back both before merging label-dependent workflows,
+otherwise valid jobs would queue without an eligible agent. Keep unsupported
+OS/CPU hosts out of this Linux CI pool.
 
 Docker selects the native child of each pinned Linux manifest index. Woodpecker
 3.19 workflow labels use exact matching, not a task-side `linux/*` glob. The custom
@@ -140,23 +136,21 @@ label is routing metadata, not a security boundary or hardware attestation. Do
 not spoof the agent platform, add emulation or duplicate matrix workflows.
 
 The following delivery sequence documents the original accepted replacement.
-Do not replay activation or Actions disablement for the architecture migration.
-Preserve existing settings, capacity one, 2 GiB job limits, fork approval and no
-job secrets. Observe fresh migration PR/main jobs on the current ARM64 host, then
-native AMD64 jobs after the separately authorized host migration. Local AMD64
-checks do not establish hosted AMD64 acceptance or authorize draining, backup,
-restore, cloud or service operations.
+Do not replay activation or Actions disablement. Preserve existing settings,
+capacity one, 2 GiB job limits, fork approval and no job secrets. Local checks
+do not establish hosted acceptance or authorize draining, backup, restore, cloud
+or service operations.
 
 ## Original parent-owned delivery
 
 1. Review and integrate the source separately. Before activation, read back the
    configuration path, timeout **360**, fork approval, empty
    `approval_allowed_users`, all trust capabilities false, existing supported
-   clone-plugin allowlisting, and no job secrets. Keep the existing single ARM64
+   clone-plugin allowlisting, and no job secrets. Keep the single `linux/amd64`
    agent, 2 GiB job limit and capacity; do not add privileges, host/socket mounts,
    public exposure, credentials or runners.
 2. Deliver one ordinary reviewed PR. Observe the exact head's native clone,
-   workflows, original commands and nonzero test counts, ARM64 execution, and
+   workflows, original commands and nonzero test counts, native execution, and
    matching exact-head GitHub feedback. No separate legacy-Actions-green gate,
    artificial failure/marker PR, or replay of MC26 is required.
 3. Merge using the normal `--match-head-commit` guard. Record the actual resulting
@@ -172,4 +166,4 @@ If proof fails, keep or re-enable Actions using the byte-identical original
 workflows and retain existing protections until a verified replacement exists.
 No live activation, settings change, PR, push, merge, publishing, or cutover is
 performed by preparing this source. Local x86 checks and manifest/lint results
-are not hosted ARM64 acceptance or proof of R2 compatibility.
+are not hosted acceptance or proof of R2 compatibility.
